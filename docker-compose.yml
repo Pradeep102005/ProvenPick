@@ -1,0 +1,109 @@
+version: "3.9"
+
+services:
+
+  # ─────────────────────────────────────────────
+  # PostgreSQL — Workflow DB
+  # ─────────────────────────────────────────────
+  postgres-workflow:
+    image: postgres:16-alpine
+    container_name: pp_postgres_workflow
+    environment:
+      POSTGRES_USER: provenpick
+      POSTGRES_PASSWORD: provenpick123
+      POSTGRES_DB: provenpick_workflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_workflow_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U provenpick -d provenpick_workflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # PostgreSQL — Staging DB
+  # ─────────────────────────────────────────────
+  postgres-staging:
+    image: postgres:16-alpine
+    container_name: pp_postgres_staging
+    environment:
+      POSTGRES_USER: provenpick
+      POSTGRES_PASSWORD: provenpick123
+      POSTGRES_DB: provenpick_staging
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_staging_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U provenpick -d provenpick_staging"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # PostgreSQL — Production DB
+  # ─────────────────────────────────────────────
+  postgres-production:
+    image: postgres:16-alpine
+    container_name: pp_postgres_production
+    environment:
+      POSTGRES_USER: provenpick
+      POSTGRES_PASSWORD: provenpick123
+      POSTGRES_DB: provenpick_production
+    ports:
+      - "5434:5432"
+    volumes:
+      - pg_production_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U provenpick -d provenpick_production"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # Redis — Job Queue
+  # ─────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: pp_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # Neo4j — Knowledge Graph
+  # ─────────────────────────────────────────────
+  neo4j:
+    image: neo4j:5-community
+    container_name: pp_neo4j
+    environment:
+      NEO4J_AUTH: neo4j/provenpick123
+      NEO4J_PLUGINS: '["apoc"]'
+    ports:
+      - "7474:7474"   # Browser UI
+      - "7687:7687"   # Bolt protocol
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD", "neo4j", "status"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+volumes:
+  pg_workflow_data:
+  pg_staging_data:
+  pg_production_data:
+  redis_data:
+  neo4j_data:
+  neo4j_logs:

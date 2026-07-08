@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables — NEVER commit this
+.env
+
+# Database / runtime data
+*.db
+*.sqlite
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# LightRAG cache
+lightrag_cache/
+cache/
+
+# Neo4j
+neo4j_data/
+
+# Node / Frontend
+node_modules/
+dist/
+build/
+.env.local
+
+# Docker volumes (if accidentally created locally)
+pg_workflow_data/
+pg_staging_data/
+pg_production_data/
+redis_data/
+neo4j_logs/
