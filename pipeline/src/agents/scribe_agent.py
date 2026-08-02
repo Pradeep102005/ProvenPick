@@ -180,6 +180,10 @@ async def get_or_create_transcript(video_id: str) -> str:
 WRITE_REVIEW_PROMPT = """
 You are an expert tech reviewer for a premier publication like GSMArena. Using the following knowledge graph context and raw insights, generate a comprehensive, structured product consensus review for the product.
 
+CRITICAL RULES:
+1. Keep the ORIGINAL product name. If the review is about the 'Redmi Turbo 3' or 'Redmi Turbo 5', the name in the JSON output must match that. Do NOT invent fictional names like Spectra X Pro.
+2. Under no circumstances should you mention YouTube, video transcripts, video creators, channels, or state that you are aggregating video reviews. Write it as an original, first-hand, independent tech review.
+
 Product Context & Facts:
 {rag_context}
 
@@ -224,8 +228,7 @@ JSON Format:
   ],
   "cons": [
     {{"text": "Con description", "weight": 4}}
-  ],
-  "mindmap_mermaid": "graph TD\\nProduct --> Pros\\nProduct --> Cons\\n(Provide a detailed Mermaid diagram linking product traits)"
+  ]
 }}
 
 Ensure that sections content_html contains valid HTML text (use <p>, <h3>, <strong>, <ul>, <li>). Do not use <h1> or <h2>. Return ONLY the JSON object.
@@ -248,32 +251,9 @@ async def run_scribe_agent(state: OrchestratorState) -> OrchestratorState:
         state["status"] = "failed"
         return state
 
-    # Step 2: Index into LightRAG Neo4j
-    try:
-        rag = await lightrag_manager.get_rag_instance()
-        # We index the text asynchronously
-        await rag.ainsert(transcript)
-        logger.info("Scribe Agent: Indexed transcript in LightRAG Neo4j.")
-    except Exception as e:
-        logger.error("Scribe Agent: Failed to index transcript in LightRAG", error=str(e))
-        state["error_message"] = f"LightRAG insert error: {str(e)}"
-        state["status"] = "failed"
-        return state
-
-    # Step 3: Query LightRAG to aggregate product comparisons & specifications
-    try:
-        # Ask RAG for comprehensive details (utilizing Global/Local search)
-        rag_query = (
-            f"What are the specifications, brand, price, pros, cons, display traits, "
-            f"battery life, sound performance, and final verdict for the product reviewed in this video: '{state['video_title']}'?"
-        )
-        from lightrag import QueryParam
-        # Use hybrid/local mode for entity details
-        rag_context = await rag.aquery(rag_query, param=QueryParam(mode="hybrid"))
-        logger.info("Scribe Agent: Fetched consensus context from LightRAG Neo4j.")
-    except Exception as e:
-        logger.warn("Scribe Agent: RAG query failed, falling back to raw transcript context", error=str(e))
-        rag_context = transcript[:15000]  # Fallback to truncated transcript
+    # Step 2: Skip complex LightRAG indexing in free tier to prevent 429 rate limit hangs
+    logger.info("Scribe Agent: Using raw transcript context directly to bypass LightRAG rate limits.")
+    rag_context = transcript[:30000]
 
     # Step 4: Write structured review via Gemini 1.5 Pro
     try:
@@ -317,7 +297,7 @@ async def run_scribe_agent(state: OrchestratorState) -> OrchestratorState:
         state["specs"] = parsed_review.get("specs", {})
         state["pros"] = parsed_review.get("pros", [])
         state["cons"] = parsed_review.get("cons", [])
-        state["mindmap_mermaid"] = parsed_review.get("mindmap_mermaid")
+        state["mindmap_mermaid"] = None
         
         # Set status for next node
         state["status"] = "critiquing"

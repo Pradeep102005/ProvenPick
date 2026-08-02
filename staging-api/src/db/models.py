@@ -47,7 +47,7 @@ class StagingProductReview(Base):
     l3_category_id     = Column(Integer, nullable=False)                    # AI-suggested, editor can change
     category_name      = Column(String(255))
     review_title       = Column(String(512), nullable=False)
-    slug               = Column(String(512), unique=True, nullable=False)
+    slug               = Column(String(512), nullable=False)
     summary            = Column(Text)
     verdict            = Column(Text)
     rating             = Column(Numeric(3, 2))                              # e.g. 4.50

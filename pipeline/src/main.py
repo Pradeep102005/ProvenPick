@@ -120,8 +120,8 @@ async def start_queue_worker():
             # Block-pop from queue (waits until a payload is pushed)
             job_payload = await redis_client.pop_from_queue(PIPELINE_QUEUE, timeout=5)
             if job_payload:
-                # Run the job in the background, allowing worker to immediately pop next job
-                asyncio.create_task(process_job(job_payload))
+                # Run sequential to prevent transient 429 rate limit exceptions on free tier API
+                await process_job(job_payload)
         except Exception as e:
             logger.error("Pipeline Worker: Error inside polling loop", error=str(e))
             await asyncio.sleep(5)

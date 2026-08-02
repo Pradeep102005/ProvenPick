@@ -103,7 +103,8 @@ async def run_critic_agent(state: OrchestratorState) -> OrchestratorState:
             google_api_key=GEMINI_API_KEY,
             temperature=0.0
         )
-        chain = prompt | llm_pro
+        prompt_tmpl = ChatPromptTemplate.from_template(AUDIT_PROMPT)
+        chain = prompt_tmpl | llm_pro
         
         res = await chain.ainvoke({
             "name": state["name"],
