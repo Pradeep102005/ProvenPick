@@ -13,7 +13,7 @@ services:
       POSTGRES_PASSWORD: provenpick123
       POSTGRES_DB: provenpick_workflow
     ports:
-      - "5432:5432"
+      - "5435:5432"
     volumes:
       - pg_workflow_data:/var/lib/postgresql/data
     healthcheck:

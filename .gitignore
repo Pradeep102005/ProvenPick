@@ -41,6 +41,7 @@ cache/
 
 # Neo4j
 neo4j_data/
+rag_storage/
 
 # Node / Frontend
 node_modules/

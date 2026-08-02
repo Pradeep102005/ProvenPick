@@ -7,7 +7,7 @@ from .models import Base
 
 DATABASE_URL = os.environ.get(
     "WORKFLOW_DATABASE_URL",
-    "postgresql+asyncpg://provenpick:provenpick123@localhost:5432/provenpick_workflow"
+    "postgresql+asyncpg://provenpick:provenpick123@127.0.0.1:5435/provenpick_workflow"
 )
 
 engine = create_async_engine(DATABASE_URL, echo=False, pool_pre_ping=True)

@@ -367,7 +367,11 @@ ProvenPick/
 │           ├── models.py        ← SQLAlchemy models (production DB)
 │           └── session.py
 │
-├── frontend/                    ← React + Vite (Public Site)
+We also have a separate web directory on the Desktop:
+
+```
+ProvenPick-web/
+├── public-site/                 ← React + Vite (Public Site)
 │   └── src/
 │       ├── components/
 │       │   ├── Navbar.jsx
@@ -380,7 +384,7 @@ ProvenPick/
 │           ├── ArticlePage.jsx  ← Full buying guide
 │           └── CategoryPage.jsx ← All articles in a category
 │
-└── staging-frontend/            ← React + Vite (Editor Dashboard)
+└── editor-dashboard/            ← React + Vite (Editor Dashboard)
     └── src/
         └── pages/
             ├── ReviewQueue.jsx  ← List pending articles
