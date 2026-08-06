@@ -199,11 +199,29 @@ async def approve_review(
     review.reviewed_at = datetime.now(timezone.utc)
     review.reviewed_by = "editor"
 
-    if payload:
-        if payload.l3_category_id is not None:
-            review.l3_category_id = payload.l3_category_id
+    if payload and payload.l3_category_id is not None:
+        review.l3_category_id = payload.l3_category_id
         if payload.category_name is not None:
             review.category_name = payload.category_name
+    elif not review.l3_category_id:
+        # Auto-query production DB categories via AI categorizer
+        production_api_url = os.environ.get("PRODUCTION_API_URL", "http://localhost:8002")
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                cat_resp = await client.post(
+                    f"{production_api_url}/api/categories/auto-categorize",
+                    json={
+                        "product_name": review.name,
+                        "review_title": review.review_title,
+                        "summary": review.verdict or review.name
+                    }
+                )
+                if cat_resp.status_code == 200:
+                    cat_data = cat_resp.json()
+                    review.l3_category_id = cat_data.get("l3_id")
+                    review.category_name = f"{cat_data.get('l1_name')} -> {cat_data.get('l2_name')} -> {cat_data.get('l3_name')}"
+        except Exception as e:
+            logger.error("Failed to auto-categorize upon approval", error=str(e))
 
     await db.commit()
     await db.refresh(review)
@@ -310,6 +328,25 @@ async def reject_review(
     review.reviewed_at = datetime.now(timezone.utc)
     review.reviewed_by = "editor"
 
+    await db.commit()
+    await db.refresh(review)
+    return review
+
+@router.patch("/{uuid}/feature", response_model=StagingProductReviewOut)
+async def feature_review(
+    uuid: UUID,
+    db: AsyncSession = Depends(get_session)
+):
+    """
+    Toggle is_featured flag for the homepage flash cards.
+    """
+    stmt = select(StagingProductReview).where(StagingProductReview.product_uuid == uuid).options(selectinload(StagingProductReview.sources))
+    result = await db.execute(stmt)
+    review = result.scalars().first()
+    if not review:
+        raise HTTPException(status_code=404, detail=f"Product review with UUID {uuid} not found")
+        
+    review.is_featured = not review.is_featured
     await db.commit()
     await db.refresh(review)
     return review

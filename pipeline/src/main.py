@@ -131,12 +131,11 @@ async def main():
     logger.info("Pipeline: Initializing database tables...")
     await create_tables()
 
-    # Step 2: Initialize Scheduler for Daily Scouting scans
+    # Step 2: Initialize Scheduler for Scouting scans every 5 hours
     scheduler = AsyncIOScheduler()
-    # Runs at the scheduled hour daily
-    scheduler.add_job(run_channel_scan, 'cron', hour=SCAN_HOUR, minute=SCAN_MINUTE)
+    scheduler.add_job(run_channel_scan, 'interval', hours=5)
     scheduler.start()
-    logger.info("Pipeline Scheduler started.", daily_run_time=f"{SCAN_HOUR:02d}:{SCAN_MINUTE:02d} UTC")
+    logger.info("Pipeline Scheduler started. Scanning monitored YouTube channels every 5 hours.")
 
     # Step 3: Run one scan immediately on startup in development to seed reviews
     logger.info("Pipeline Startup: Running initial channel discovery scan...")

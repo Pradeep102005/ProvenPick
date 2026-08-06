@@ -81,7 +81,7 @@ async def run_critic_agent(state: OrchestratorState) -> OrchestratorState:
         return state
 
     # ── 2. Max Retry Escape Gate ──────────────────────────────────────────────
-    attempt_count = state.get("attempt_count", 0)
+    attempt_count = state.get("attempt_count") or 0
     if attempt_count >= 3:
         logger.info("Critic Agent: Max rewrite attempts reached (3). Forcing approval.", job_uuid=str(state["job_uuid"]))
         state["status"] = "enriching"

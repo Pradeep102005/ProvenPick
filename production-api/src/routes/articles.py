@@ -58,6 +58,7 @@ class ArticlePublishPayload(BaseModel):
     seo_description: Optional[str] = None
     category_name: str
     l3_category_id: int
+    is_featured: Optional[bool] = False
     products: List[ProductCreate]
     sources: List[ArticleSourceCreate] = []
 
@@ -80,9 +81,29 @@ async def publish_article(
     Dynamically creates L1, L2, L3 categories if they don't exist.
     """
     # 1. Ensure L1/L2/L3 category hierarchy exists
-    # Find or create L1: default "Electronics"
-    l1_name = "Electronics"
-    l1_slug = "electronics"
+    cat_lower = payload.category_name.lower()
+    title_lower = payload.title.lower()
+
+    if any(k in cat_lower or k in title_lower for k in ["phone", "mobile", "android", "iphone", "galaxy", "redmi", "pixel", "oneplus"]):
+        l1_name = "Smartphones"
+        l2_name = "iPhones" if "iphone" in title_lower else ("Android Phones" if "android" in title_lower or "redmi" in title_lower or "galaxy" in title_lower else "Flagship Phones")
+    elif any(k in cat_lower or k in title_lower for k in ["macbook", "laptop", "notebook", "chromebook"]):
+        l1_name = "Laptops"
+        l2_name = "MacBooks" if "macbook" in title_lower else ("Gaming Laptops" if "gaming" in title_lower else "Windows Laptops")
+    elif any(k in cat_lower or k in title_lower for k in ["headphone", "earbud", "audio", "speaker", "soundbar"]):
+        l1_name = "Audio"
+        l2_name = "Headphones" if "headphone" in title_lower or "wh-" in title_lower else "Earbuds"
+    elif any(k in cat_lower or k in title_lower for k in ["watch", "wearable", "band"]):
+        l1_name = "Smartwatches"
+        l2_name = "Apple Watches" if "apple" in title_lower else "Android Watches"
+    elif any(k in cat_lower or k in title_lower for k in ["fridge", "refrigerator", "washing", "ac", "purifier", "vacuum"]):
+        l1_name = "Home Appliances"
+        l2_name = "Refrigerators" if "fridge" in title_lower else "Air Purifiers"
+    else:
+        l1_name = "Tech Guides"
+        l2_name = "General Tech"
+
+    l1_slug = slugify(l1_name)
     stmt = select(L1Category).where(L1Category.slug == l1_slug)
     res = await db.execute(stmt)
     l1 = res.scalars().first()
@@ -91,14 +112,7 @@ async def publish_article(
         db.add(l1)
         await db.flush()
 
-    # Find or create L2: default depending on category_name
-    l2_name = "Tech Guides"
-    if "earbud" in payload.category_name.lower() or "headphone" in payload.category_name.lower() or "audio" in payload.category_name.lower():
-        l2_name = "Audio Gear"
-    elif "phone" in payload.category_name.lower() or "mobile" in payload.category_name.lower():
-        l2_name = "Smartphones"
     l2_slug = slugify(l2_name)
-    
     stmt = select(L2Category).where(L2Category.slug == l2_slug)
     res = await db.execute(stmt)
     l2 = res.scalars().first()
@@ -203,7 +217,8 @@ async def list_articles(
     Fetches published articles. If category_slug is provided, filters by L3 category.
     """
     stmt = select(Article).where(Article.is_published == True).options(
-        selectinload(Article.l3_category)
+        selectinload(Article.l3_category),
+        selectinload(Article.products)
     )
     if category_slug:
         stmt = stmt.join(L3Category).where(L3Category.slug == category_slug)
@@ -220,11 +235,37 @@ async def list_articles(
             "slug": art.slug,
             "introduction": art.introduction,
             "category_name": art.l3_category.name,
+            "is_featured": art.is_featured,
             "published_at": art.published_at,
-            "view_count": art.view_count
+            "view_count": art.view_count,
+            "products": [
+                {
+                    "name": p.name,
+                    "brand": p.brand,
+                    "price_inr": float(p.price_inr) if p.price_inr else None,
+                    "image_url": p.image_url,
+                    "image_urls": [p.image_url] if p.image_url else []
+                }
+                for p in art.products
+            ]
         }
         for art in articles
     ]
+
+@router.patch("/{slug}/feature")
+async def toggle_article_feature(
+    slug: str,
+    db: AsyncSession = Depends(get_session)
+):
+    stmt = select(Article).where(Article.slug == slug)
+    res = await db.execute(stmt)
+    art = res.scalars().first()
+    if not art:
+        raise HTTPException(status_code=404, detail="Article not found")
+        
+    art.is_featured = not art.is_featured
+    await db.commit()
+    return {"status": "ok", "is_featured": art.is_featured}
 
 # ── Route: Get Single Article by Slug ──
 @router.get("/{slug}")

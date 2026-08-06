@@ -66,14 +66,10 @@ function App() {
       const res = await fetch(`${API_BASE}/${selectedReview.product_uuid}/approve`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          l3_category_id: parseInt(categoryId),
-          category_name: categoryName
-        })
+        body: JSON.stringify({})
       });
       if (!res.ok) throw new Error("Approval action failed on staging server.");
       
-      setShowApproveModal(false);
       await fetchReviews();
     } catch (err) {
       alert(err.message);
@@ -181,9 +177,9 @@ function App() {
                   <>
                     <button 
                       className="action-btn approve"
-                      onClick={() => setShowApproveModal(true)}
+                      onClick={handleApprove}
                     >
-                      Approve & Publish
+                      ✓ Approve & Publish Now
                     </button>
                     <button 
                       className="action-btn reject"
@@ -193,8 +189,23 @@ function App() {
                     </button>
                   </>
                 )}
+                <button 
+                  className="action-btn"
+                  style={{ background: selectedReview.is_featured ? '#eab308' : '#3a3a46', color: selectedReview.is_featured ? '#000' : '#fff', marginLeft: '10px', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '700' }}
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`${API_BASE}/${selectedReview.product_uuid}/feature`, { method: "PATCH" });
+                      if (!res.ok) throw new Error("Failed to update feature status");
+                      await fetchReviews();
+                    } catch (err) {
+                      alert(err.message);
+                    }
+                  }}
+                >
+                  {selectedReview.is_featured ? '⭐ Featured on Homepage Flashcard' : '☆ Pin to Homepage Flashcard'}
+                </button>
                 {selectedReview.status === "published" && (
-                  <span className="status-badge published" style={{ padding: '10px 16px', borderRadius: '8px' }}>
+                  <span className="status-badge published" style={{ padding: '10px 16px', borderRadius: '8px', marginLeft: '10px' }}>
                     🚀 Published to Live Site
                   </span>
                 )}
@@ -353,46 +364,7 @@ function App() {
         )}
       </main>
 
-      {/* Approve Modal */}
-      {showApproveModal && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h2 className="modal-title">Approve & Publish to Production</h2>
-            <p className="modal-desc">
-              This review will go live immediately on the production website. You can edit the target category categorization overrides below.
-            </p>
-            
-            <div className="modal-form-group">
-              <label>L3 Category ID</label>
-              <input 
-                type="number" 
-                className="modal-input"
-                value={categoryId} 
-                onChange={(e) => setCategoryId(e.target.value)} 
-              />
-            </div>
-            
-            <div className="modal-form-group">
-              <label>Category Name</label>
-              <input 
-                type="text" 
-                className="modal-input"
-                value={categoryName} 
-                onChange={(e) => setCategoryName(e.target.value)} 
-              />
-            </div>
 
-            <div className="modal-actions">
-              <button className="modal-btn cancel" onClick={() => setShowApproveModal(false)}>
-                Cancel
-              </button>
-              <button className="modal-btn" style={{ background: 'var(--success)', color: '#000' }} onClick={handleApprove}>
-                Publish Now
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Reject Modal */}
       {showRejectModal && (

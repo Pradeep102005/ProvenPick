@@ -53,15 +53,18 @@ async def search_unsplash_images(query: str, limit: int = 3) -> List[str]:
         ],
         "phone": [
             "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop&q=80",
-            "https://images.unsplash.com/photo-1598327105666-5b89351aff97?w=600&auto=format&fit=crop&q=80"
+            "https://images.unsplash.com/photo-1598327105666-5b89351aff97?w=600&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1565849904461-04a58ad377e0?w=600&auto=format&fit=crop&q=80"
         ]
     }
     
     # Try match keyword in query
     query_lower = query.lower()
+    if any(k in query_lower for k in ["phone", "redmi", "turbo", "poco", "mobile", "smartphone", "galaxy", "iphone"]):
+        return fallback_map["phone"][:limit]
     for key, urls in fallback_map.items():
         if key in query_lower:
             return urls[:limit]
             
     # Default fallback
-    return ["https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80"][:limit]
+    return ["https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop&q=80"][:limit]

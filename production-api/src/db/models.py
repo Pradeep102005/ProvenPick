@@ -118,6 +118,7 @@ class Article(Base):
     seo_title         = Column(String(70))     # ≤ 70 chars for Google title tag
     seo_description   = Column(String(160))    # ≤ 160 chars for meta description
     is_published      = Column(Boolean, default=True)
+    is_featured       = Column(Boolean, default=False)
     view_count        = Column(Integer, default=0)
     published_at      = Column(DateTime(timezone=True), default=utcnow)
     updated_at        = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)

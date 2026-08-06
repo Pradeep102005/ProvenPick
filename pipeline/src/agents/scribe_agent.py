@@ -183,6 +183,8 @@ You are an expert tech reviewer for a premier publication like GSMArena. Using t
 CRITICAL RULES:
 1. Keep the ORIGINAL product name. If the review is about the 'Redmi Turbo 3' or 'Redmi Turbo 5', the name in the JSON output must match that. Do NOT invent fictional names like Spectra X Pro.
 2. Under no circumstances should you mention YouTube, video transcripts, video creators, channels, or state that you are aggregating video reviews. Write it as an original, first-hand, independent tech review.
+3. RATING SCORE: Calculate an objective score out of 5.0 (e.g., 4.2, 4.7, 3.9, 4.8) based on pros, cons, and price-to-performance ratio. Do NOT return a default 4.5.
+4. CONTENT DEPTH: Each section's content_html must be extensive and comprehensive, containing 3-4 detailed HTML paragraphs with <h3> subheaders and clear analysis.
 
 Product Context & Facts:
 {rag_context}
@@ -201,7 +203,7 @@ JSON Format:
   "slug": "url-safe-lowercase-slug (e.g. apple-iphone-15-review)",
   "summary": "A 2-3 sentence overview summarizing the consensus of the reviews.",
   "verdict": "A 2-3 sentence final purchase recommendation (Who is this for? Is it worth buying?).",
-  "rating": 4.50,
+  "rating": 4.60,
   "review_sections": [
     {{
       "page_index": 1,
@@ -251,9 +253,9 @@ async def run_scribe_agent(state: OrchestratorState) -> OrchestratorState:
         state["status"] = "failed"
         return state
 
-    # Step 2: Skip complex LightRAG indexing in free tier to prevent 429 rate limit hangs
-    logger.info("Scribe Agent: Using raw transcript context directly to bypass LightRAG rate limits.")
-    rag_context = transcript[:30000]
+    # Step 2: Direct transcript context (Neo4j / LightRAG removed to save API cost)
+    logger.info("Scribe Agent: Using raw transcript context directly for review writing.")
+    rag_context = transcript[:35000]
 
     # Step 4: Write structured review via Gemini 1.5 Pro
     try:
@@ -275,28 +277,43 @@ async def run_scribe_agent(state: OrchestratorState) -> OrchestratorState:
         })
         
         # Clean response text in case LLM added markdown wrappers
-        clean_json_str = res.content.strip()
-        if clean_json_str.startswith("```json"):
-            clean_json_str = clean_json_str[7:]
-        if clean_json_str.endswith("```"):
-            clean_json_str = clean_json_str[:-3]
-        clean_json_str = clean_json_str.strip()
-        
+        raw_text = res.content.strip()
+        match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+        if match:
+            clean_json_str = match.group()
+        else:
+            clean_json_str = raw_text
+            
         parsed_review = json.loads(clean_json_str)
         
         # Merge parsed JSON into state
         state["name"] = parsed_review.get("name", state["video_title"])
-        state["brand"] = parsed_review.get("brand")
-        state["price_inr"] = float(parsed_review.get("price_inr", 0.0))
+        state["brand"] = parsed_review.get("brand") or "Generic"
+        price_val = parsed_review.get("price_inr")
+        state["price_inr"] = float(price_val) if price_val is not None else 0.0
         state["review_title"] = parsed_review.get("review_title")
         state["slug"] = parsed_review.get("slug")
         state["summary"] = parsed_review.get("summary")
         state["verdict"] = parsed_review.get("verdict")
-        state["rating"] = float(parsed_review.get("rating", 0.0))
         state["review_sections"] = parsed_review.get("review_sections", [])
         state["specs"] = parsed_review.get("specs", {})
-        state["pros"] = parsed_review.get("pros", [])
-        state["cons"] = parsed_review.get("cons", [])
+        pros_list = parsed_review.get("pros", [])
+        cons_list = parsed_review.get("cons", [])
+        state["pros"] = pros_list
+        state["cons"] = cons_list
+        
+        # Calculate Consensus Rating mathematically from Pros & Cons weight sum
+        pro_weight_sum = sum(p.get("weight", 4) if isinstance(p, dict) else 4 for p in pros_list)
+        con_weight_sum = sum(c.get("weight", 3) if isinstance(c, dict) else 3 for c in cons_list)
+        total_weight = pro_weight_sum + con_weight_sum
+        
+        if total_weight > 0:
+            math_rating = round(5.0 * (pro_weight_sum / total_weight), 1)
+        else:
+            math_rating = 4.5
+            
+        state["rating"] = max(1.0, min(5.0, math_rating))
+        logger.info("Scribe Agent: Calculated mathematical consensus score", score=state["rating"], pro_sum=pro_weight_sum, con_sum=con_weight_sum)
         state["mindmap_mermaid"] = None
         
         # Set status for next node

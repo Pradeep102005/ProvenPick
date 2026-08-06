@@ -14,22 +14,20 @@ async def run_enricher_agent(state: OrchestratorState) -> OrchestratorState:
     """
     logger.info("Enricher Agent: Starting enrichment process...", product=state.get("name"))
 
-    # 1. Fetch Product Images
-    query_term = f"{state.get('brand', '')} {state.get('name', '')}".strip()
-    if not query_term:
-        query_term = "technology"
-        
-    try:
-        images = await search_unsplash_images(query_term, limit=3)
-        state["image_urls"] = images
-        logger.info("Enricher Agent: Attached product images", count=len(images))
-    except Exception as e:
-        logger.error("Enricher Agent: Failed to fetch images, using default fallback", error=str(e))
-        state["image_urls"] = ["https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80"]
+    # 1. Attach YouTube Video Thumbnail as Product Image
+    video_id = state.get("video_id")
+    if video_id:
+        yt_thumb = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+        state["image_urls"] = [yt_thumb]
+        logger.info("Enricher Agent: Attached YouTube video thumbnail as product image", url=yt_thumb)
+    else:
+        state["image_urls"] = [
+            "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop&q=80"
+        ]
 
     # 2. Inject Affiliate Tags
     raw_links = state.get("affiliate_links", {})
-    # If Scribe failed to generate affiliate links, we can populate a default mock Amazon search URL
+    query_term = f"{state.get('brand', '')} {state.get('name', '')}".strip() or "technology"
     if not raw_links:
         import urllib.parse
         encoded_name = urllib.parse.quote(query_term)

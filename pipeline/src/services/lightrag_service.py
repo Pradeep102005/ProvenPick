@@ -19,6 +19,8 @@ try:
         model_name = kwargs.pop("model_name", "gemini-2.5-flash")
         if not model_name.startswith("gemini"):
             model_name = "gemini-2.5-flash"
+        # Rate limit protection for free-tier API: space out requests
+        await asyncio.sleep(1.5)
         return await gemini_model_complete(
             prompt,
             system_prompt=system_prompt,

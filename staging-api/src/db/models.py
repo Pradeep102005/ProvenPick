@@ -63,6 +63,7 @@ class StagingProductReview(Base):
     mindmap_mermaid    = Column(Text)
     mindmap_image      = Column(LargeBinary)                                # PNG rendered from Mermaid
     status             = Column(String(32), default="pending")              # pending | approved | rejected | published
+    is_featured        = Column(Boolean, default=False)
     rejection_count    = Column(Integer, default=0)
     editor_comments    = Column(Text)                                       # Set when rejecting
     submitted_at       = Column(DateTime(timezone=True), default=utcnow)

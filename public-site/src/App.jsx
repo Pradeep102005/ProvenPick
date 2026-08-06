@@ -7,11 +7,29 @@ function App() {
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [articleDetail, setArticleDetail] = useState(null);
   const [activeTab, setActiveTab] = useState("guide"); // guide | proscons | specs
+  const [selectedCategory, setSelectedCategory] = useState("All");
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Fetch all articles
+  const [categoriesTree, setCategoriesTree] = useState([]);
+  const [selectedL1, setSelectedL1] = useState("All");
+  const [selectedL2, setSelectedL2] = useState("All");
+
+  // Fetch DB Categories taxonomy
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch("http://localhost:8002/api/categories");
+      if (res.ok) {
+        const data = await res.json();
+        setCategoriesTree(data);
+      }
+    } catch (err) {
+      console.error("Failed to load DB taxonomy", err);
+    }
+  };
+
+  // Fetch all published articles from Production API
   const fetchArticles = async () => {
     setLoading(true);
     try {
@@ -28,9 +46,10 @@ function App() {
 
   useEffect(() => {
     fetchArticles();
+    fetchCategories();
   }, []);
 
-  // Fetch article detail
+  // Fetch article detail by slug
   const loadArticleDetail = async (slug) => {
     setDetailLoading(true);
     try {
@@ -40,7 +59,7 @@ function App() {
       setArticleDetail(data);
       setActiveTab("guide");
       
-      // Increment view count in production API
+      // Post view count increment
       fetch(`${API_BASE}/${slug}/view`, { method: "POST" }).catch(() => {});
     } catch (err) {
       alert(err.message);
@@ -52,234 +71,424 @@ function App() {
   const handleSelectArticle = (slug) => {
     setSelectedArticle(slug);
     loadArticleDetail(slug);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleBack = () => {
     setSelectedArticle(null);
     setArticleDetail(null);
-    fetchArticles(); // refresh list to show updated view count
+    fetchArticles();
   };
 
   const handleAffiliateClick = async (linkId, url) => {
-    // Record click count in production API
     try {
       await fetch(`${API_BASE}/affiliate/click/${linkId}`, { method: "POST" });
     } catch (err) {
       console.error("Failed to register affiliate click event", err);
     }
-    // Open URL
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
+  // Get current L2 subcategory list based on selected L1
+  const currentL1Obj = categoriesTree.find(c => c.name.toLowerCase() === selectedL1.toLowerCase());
+  const l2Subcategories = currentL1Obj ? currentL1Obj.l2_categories : [];
+
+  // Filtered articles based on selected L1 and L2
+  const filteredArticles = articles.filter(a => {
+    const catName = (a.category_name || "").toLowerCase();
+    if (selectedL1 === "All") return true;
+    
+    if (selectedL2 !== "All") {
+      return catName.includes(selectedL2.toLowerCase());
+    }
+    
+    // Check if category matches L1 or any of its L2s
+    if (catName.includes(selectedL1.toLowerCase())) return true;
+    return l2Subcategories.some(l2 => catName.includes(l2.name.toLowerCase()));
+  });
+
+  const featuredHeroArticle = filteredArticles[0] || articles[0];
+  const sideBestArticles = (filteredArticles.length > 0 ? filteredArticles : articles).slice(0, 5);
+
   return (
     <div>
-      {/* Header */}
-      <header className="site-header">
-        <div className="container header-flex">
-          <div className="brand" style={{ cursor: 'pointer' }} onClick={handleBack}>
-            <div className="brand-logo">PP</div>
-            <span className="brand-name">ProvenPick</span>
+      {/* 1. Top CNET Announcement Banner */}
+      <div className="cnet-top-banner">
+        <div className="cnet-top-banner-title">
+          <span className="cnet-banner-badge">PROVENPICK</span>
+          NAVIGATING A WORLD OF ACCELERATING CHANGE
+        </div>
+        <div style={{ fontSize: '13px', cursor: 'pointer' }}>⚡ EXPERT TESTED</div>
+      </div>
+
+      {/* 2. CNET Black Navigation Header with DB L1 Categories */}
+      <header className="cnet-header-dark">
+        <div className="cnet-container">
+          <div className="cnet-header-main">
+            <div className="cnet-brand" onClick={() => { setSelectedL1("All"); setSelectedL2("All"); handleBack(); }}>
+              <div className="cnet-logo-box" style={{ background: '#6366f1' }}>PROVENPICK</div>
+              <div className="cnet-tagline">VERIFIED REVIEWS • ZERO AD BIAS</div>
+            </div>
+
+            <ul className="cnet-nav-categories">
+              <li 
+                className={`cnet-nav-item ${selectedL1 === 'All' ? 'active' : ''}`}
+                onClick={() => { setSelectedL1("All"); setSelectedL2("All"); if (selectedArticle) handleBack(); }}
+              >
+                All
+              </li>
+              {categoriesTree.map(l1 => (
+                <li 
+                  key={l1.id} 
+                  className={`cnet-nav-item ${selectedL1 === l1.name ? 'active' : ''}`}
+                  onClick={() => { setSelectedL1(l1.name); setSelectedL2("All"); if (selectedArticle) handleBack(); }}
+                >
+                  {l1.name}
+                </li>
+              ))}
+            </ul>
+
+            <div className="cnet-header-actions">
+              <div className="google-preferred-btn">
+                <span>G</span> Add as preferred source on Google
+              </div>
+            </div>
           </div>
-          <nav className="header-nav">
-            <span className="nav-link active" style={{ cursor: 'pointer' }} onClick={handleBack}>Buying Guides</span>
-            <a href="https://github.com/Pradeep102005/ProvenPick" target="_blank" rel="noreferrer" className="nav-link">GitHub</a>
-          </nav>
+        </div>
+
+        {/* L2 Subcategory Pills Bar */}
+        <div className="cnet-subnav-bar">
+          <div className="cnet-container cnet-subnav-flex">
+            <button 
+              className={`cnet-pill ${selectedL2 === 'All' ? 'active' : ''}`}
+              onClick={() => { setSelectedL2("All"); if (selectedArticle) handleBack(); }}
+            >
+              All {selectedL1 !== "All" ? selectedL1 : "Categories"} →
+            </button>
+            {l2Subcategories.map(l2 => (
+              <button 
+                key={l2.id} 
+                className={`cnet-pill ${selectedL2 === l2.name ? 'active' : ''}`}
+                onClick={() => { setSelectedL2(l2.name); if (selectedArticle) handleBack(); }}
+              >
+                {l2.name} →
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
       {/* Main Content Area */}
-      <main className="container">
+      <div className="cnet-container">
         {!selectedArticle ? (
           <>
-            {/* Hero */}
-            <section className="hero">
-              <h1>Consensus-Driven Tech Reviews</h1>
-              <p>
-                We extract, analyze, and synthesize hands-on YouTube transcripts from multiple trusted reviewers into structured buying guides. Factual, verified, and ad-free.
-              </p>
-            </section>
+            {/* CNET Editorial Hero Layout (Matches Screenshot 1) */}
+            <div className="cnet-hero-grid">
+              {/* Left Column: Yellow "BEST" Sidebar Box */}
+              <div className="cnet-best-box">
+                <div className="cnet-best-header">
+                  <div className="cnet-best-title">BEST</div>
+                  <div className="cnet-best-subtitle">Editors' picks and our top buying guides</div>
+                </div>
 
-            {/* Catalog Grid */}
+                <div className="cnet-best-list">
+                  {sideBestArticles.length > 0 ? (
+                    sideBestArticles.map((art, idx) => (
+                      <span key={art.id || idx} className="cnet-best-item" onClick={() => handleSelectArticle(art.slug)}>
+                        Best {art.name || art.category_name} for 2026: Expert Tested & Reviewed
+                      </span>
+                    ))
+                  ) : (
+                    <>
+                      <span className="cnet-best-item">Best Smartphones for 2026: Top Tested Picks</span>
+                      <span className="cnet-best-item">Best Flagship Performance Phones</span>
+                      <span className="cnet-best-item">Best Value Audio Devices</span>
+                      <span className="cnet-best-item">Best Battery Life Phones Tested</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Center/Right Big Hero Feature Card */}
+              {featuredHeroArticle ? (
+                <div className="cnet-hero-main-card" onClick={() => handleSelectArticle(featuredHeroArticle.slug)}>
+                  <div className="cnet-hero-img-box">
+                    <img 
+                      src={featuredHeroArticle.products?.[0]?.image_url || featuredHeroArticle.products?.[0]?.image_urls?.[0] || "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop&q=80"} 
+                      alt={featuredHeroArticle.title} 
+                      className="cnet-hero-img"
+                    />
+                  </div>
+                  <div className="cnet-hero-content">
+                    <div className="cnet-hero-headline">{featuredHeroArticle.title}</div>
+                    <div className="cnet-hero-summary">{featuredHeroArticle.introduction}</div>
+                    <div className="cnet-byline">By Editorial Team • 5 Min Read</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="cnet-hero-main-card" style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '300px' }}>
+                  <div style={{ textAlign: 'center', color: '#777' }}>
+                    Loading featured reviews...
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Horizontal Flash Card Carousel Section: Trending Product Reviews */}
+            <div className="cnet-section-header">
+              <div className="cnet-section-title">Trending Product Reviews</div>
+              <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--cnet-red)', cursor: 'pointer' }}>View All →</div>
+            </div>
+
             {loading ? (
-              <div style={{ textAlign: 'center', padding: '80px', color: 'var(--text-muted)' }}>Loading trusted buying guides...</div>
+              <div style={{ textAlign: 'center', padding: '60px', color: '#777' }}>Loading reviews catalog...</div>
             ) : error ? (
-              <div style={{ color: 'var(--danger)', textAlign: 'center', padding: '40px' }}>Error: {error}</div>
-            ) : articles.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '80px', color: 'var(--text-dim)' }}>
-                No guides published yet. Publish a review from Staging API to get started!
+              <div style={{ color: 'red', textAlign: 'center', padding: '40px' }}>Error loading guides: {error}</div>
+            ) : filteredArticles.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px', color: '#888' }}>
+                No buying guides published yet. Publish a draft from Staging to see it live!
               </div>
             ) : (
-              <section className="catalog-grid">
-                {articles.map(art => (
-                  <div key={art.id} className="article-card">
-                    <span className="card-category">{art.category_name}</span>
-                    <h2 className="card-title">{art.title}</h2>
-                    <p className="card-intro">{art.introduction}</p>
-                    <div className="card-footer">
-                      <span>👀 {art.view_count || 0} views</span>
-                      <button 
-                        className="buy-button" 
-                        style={{ padding: '8px 16px', fontSize: '13px', width: 'auto', margin: 0 }}
-                        onClick={() => handleSelectArticle(art.slug)}
-                      >
-                        Read Guide
-                      </button>
+              <div className="cnet-carousel-container">
+                {filteredArticles.map(art => {
+                  const firstProd = art.products?.[0] || {};
+                  const mainImg = firstProd.image_url || firstProd.image_urls?.[0] || "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop&q=80";
+                  return (
+                    <div key={art.id} className="cnet-flash-card" onClick={() => handleSelectArticle(art.slug)}>
+                      <div className="cnet-flash-img-box">
+                        <img src={mainImg} alt={art.title} className="cnet-flash-img" />
+                        <div className="cnet-rating-badge">⭐ {firstProd.rating || "4.5"}</div>
+                      </div>
+                      <div className="cnet-flash-body">
+                        <div className="cnet-flash-category">{art.category_name || "Mobile"}</div>
+                        <div className="cnet-flash-title">{art.title}</div>
+                        <div className="cnet-flash-byline">By ProvenPick Experts</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Additional Horizontal Section: Top Tested Smartphones */}
+            <div className="cnet-section-header" style={{ marginTop: '50px' }}>
+              <div className="cnet-section-title">Latest Hands-On Buying Guides</div>
+            </div>
+
+            <div className="cnet-carousel-container" style={{ marginBottom: '60px' }}>
+              {articles.map(art => {
+                const firstProd = art.products?.[0] || {};
+                const mainImg = firstProd.image_urls?.[1] || firstProd.image_urls?.[0] || "https://images.unsplash.com/photo-1598327105666-5b89351aff97?w=600&auto=format&fit=crop&q=80";
+                return (
+                  <div key={`guide-${art.id}`} className="cnet-flash-card" onClick={() => handleSelectArticle(art.slug)}>
+                    <div className="cnet-flash-img-box">
+                      <img src={mainImg} alt={art.title} className="cnet-flash-img" />
+                      <div className="cnet-rating-badge">₹{firstProd.price_inr || "39,999"}</div>
+                    </div>
+                    <div className="cnet-flash-body">
+                      <div className="cnet-flash-category">{firstProd.brand || "Tech"}</div>
+                      <div className="cnet-flash-title">{art.title}</div>
+                      <div className="cnet-flash-byline">Consensus Score: {firstProd.rating || "4.5"}/5</div>
                     </div>
                   </div>
-                ))}
-              </section>
-            )}
+                );
+              })}
+            </div>
           </>
         ) : (
-          /* Article Detail View */
+          /* Article Detail View (CNET Light Mode Page) */
           <>
             {detailLoading || !articleDetail ? (
-              <div style={{ textAlign: 'center', padding: '80px', color: 'var(--text-muted)' }}>Fetching consensus details...</div>
+              <div style={{ textAlign: 'center', padding: '80px', color: '#777' }}>Loading article details...</div>
             ) : (
-              <div className="detail-layout">
-                {/* Main Content Column */}
-                <div>
-                  <button 
+              <div>
+                {/* Back Button */}
+                <div style={{ margin: '24px 0 12px' }}>
+                  <span 
                     onClick={handleBack} 
-                    style={{ background: 'transparent', border: 'none', color: 'var(--accent-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '24px', fontWeight: 600 }}
+                    style={{ cursor: 'pointer', fontWeight: '800', fontSize: '13px', color: 'var(--cnet-red)', textTransform: 'uppercase' }}
                   >
-                    ← Back to Catalog
-                  </button>
+                    ← Back to ProvenPick Home
+                  </span>
+                </div>
 
-                  <div className="detail-main-header">
-                    <h1 className="detail-main-title">{articleDetail.title}</h1>
-                    <div className="detail-meta-row">
-                      <span>🏷️ {articleDetail.category.name}</span>
-                      <span>📅 {new Date(articleDetail.published_at).toLocaleDateString()}</span>
-                      <span>👁️ {articleDetail.view_count} views</span>
-                    </div>
-                  </div>
-
-                  {/* Tabs */}
-                  <div className="detail-tab-menu">
-                    <button 
-                      className={`detail-tab ${activeTab === "guide" ? "active" : ""}`}
-                      onClick={() => setActiveTab("guide")}
-                    >
-                      Consensus Review
-                    </button>
-                    <button 
-                      className={`detail-tab ${activeTab === "proscons" ? "active" : ""}`}
-                      onClick={() => setActiveTab("proscons")}
-                    >
-                      Pros & Cons
-                    </button>
-                    <button 
-                      className={`detail-tab ${activeTab === "specs" ? "active" : ""}`}
-                      onClick={() => setActiveTab("specs")}
-                    >
-                      Specs
-                    </button>
-                  </div>
-
-                  {/* Tab Panels */}
-                  <div style={{ minHeight: '400px' }}>
-                    {activeTab === "guide" && (
-                      <div 
-                        className="article-body-html" 
-                        dangerouslySetInnerHTML={{ __html: articleDetail.full_article_html }} 
-                      />
-                    )}
-
-                    {activeTab === "proscons" && (
-                      <div className="pros-cons-container" style={{ margin: 0 }}>
-                        {articleDetail.products.map(product => (
-                          <div key={product.id} className="pros-cons-container" style={{ gridTemplateColumns: '1fr 1fr', gap: '30px', width: '100%' }}>
-                            <div className="pro-con-box" style={{ background: 'rgba(255,255,255,0.01)' }}>
-                              <h3 className="pro-con-header pros" style={{ fontSize: '16px' }}>🟢 Pros</h3>
-                              <div className="pro-con-list">
-                                {product.pros?.map((p, i) => (
-                                  <div key={i} className="pro-con-item pro">
-                                    <span className="pro-con-text">{p.text}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                            <div className="pro-con-box" style={{ background: 'rgba(255,255,255,0.01)' }}>
-                              <h3 className="pro-con-header cons" style={{ fontSize: '16px' }}>🔴 Cons</h3>
-                              <div className="pro-con-list">
-                                {product.cons?.map((c, i) => (
-                                  <div key={i} className="pro-con-item con">
-                                    <span className="pro-con-text">{c.text}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {activeTab === "specs" && (
-                      <div className="specs-grid">
-                        {articleDetail.products.map(product => 
-                          Object.entries(product.specs || {}).map(([key, val]) => (
-                            <div key={key} className="spec-item">
-                              <div className="spec-key">{key}</div>
-                              <div className="spec-val">{String(val)}</div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    )}
+                {/* Article Header */}
+                <div className="cnet-detail-header">
+                  <h1 className="cnet-detail-title">{articleDetail.title}</h1>
+                  
+                  <div className="cnet-meta-strip">
+                    <span>By <strong>ProvenPick Editorial Staff</strong></span>
+                    <span>•</span>
+                    <span>Category: <strong>{articleDetail.category.name}</strong></span>
+                    <span>•</span>
+                    <span>Published: {new Date(articleDetail.published_at).toLocaleDateString()}</span>
+                    <span>•</span>
+                    <span>👁️ {articleDetail.view_count} views</span>
                   </div>
                 </div>
 
-                {/* Sidebar Column */}
-                <aside>
-                  <div className="sidebar-card">
-                    <div className="badge-rating">
-                      ⭐ {articleDetail.products[0]?.rating || "4.5"} / 5.0 Rating
-                    </div>
-                    
-                    <h3 className="sidebar-summary-title">Summary Verdict</h3>
-                    <p className="sidebar-summary-text">{articleDetail.introduction}</p>
-
-                    {articleDetail.products.map(product => 
-                      product.affiliate_links?.map(link => (
-                        <div key={link.id}>
-                          <button 
-                            className="buy-button"
-                            onClick={() => handleAffiliateClick(link.id, link.tracked_url)}
-                          >
-                            Buy on {link.platform.toUpperCase()} 🛒
-                          </button>
-                        </div>
-                      ))
-                    )}
-                    <p className="buy-button-sub">Commissions earned support the editorial team.</p>
-
-                    {articleDetail.sources.length > 0 && (
-                      <div style={{ marginTop: '32px' }}>
-                        <h4 className="sidebar-summary-title" style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Verified Sources</h4>
-                        <div className="sources-card-list">
-                          {articleDetail.sources.map((src, i) => (
-                            <a 
-                              key={i} 
-                              href={src.video_url} 
-                              target="_blank" 
-                              rel="noreferrer" 
-                              className="source-card-link"
-                            >
-                              <div className="source-card-title">{src.video_title}</div>
-                              <div className="source-card-channel">{src.channel}</div>
-                            </a>
-                          ))}
+                {/* Main Article Grid */}
+                <div className="cnet-detail-grid">
+                  {/* Left Column: Product Photos, Tabs, Review Content */}
+                  <div>
+                    {/* Product Photo Gallery */}
+                    {articleDetail.products[0]?.image_urls?.length > 0 && (
+                      <div className="cnet-gallery-box">
+                        <img 
+                          src={articleDetail.products[0].image_urls[0]} 
+                          alt="Product" 
+                          className="cnet-gallery-main-img"
+                        />
+                        <div className="cnet-gallery-sub-grid">
+                          <img 
+                            src={articleDetail.products[0].image_urls[1] || articleDetail.products[0].image_urls[0]} 
+                            alt="Angle 2" 
+                            className="cnet-gallery-sub-img"
+                          />
+                          <img 
+                            src={articleDetail.products[0].image_urls[2] || articleDetail.products[0].image_urls[0]} 
+                            alt="Angle 3" 
+                            className="cnet-gallery-sub-img"
+                          />
                         </div>
                       </div>
                     )}
+
+                    {/* CNET Section Tabs */}
+                    <div className="cnet-tab-bar">
+                      <button 
+                        className={`cnet-tab-btn ${activeTab === 'guide' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('guide')}
+                      >
+                        Consensus Review
+                      </button>
+                      <button 
+                        className={`cnet-tab-btn ${activeTab === 'proscons' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('proscons')}
+                      >
+                        Pros & Cons
+                      </button>
+                      <button 
+                        className={`cnet-tab-btn ${activeTab === 'specs' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('specs')}
+                      >
+                        Specifications
+                      </button>
+                    </div>
+
+                    {/* Tab Panels */}
+                    {activeTab === 'guide' && (
+                      <div 
+                        className="cnet-article-body"
+                        dangerouslySetInnerHTML={{ __html: articleDetail.full_article_html }}
+                      />
+                    )}
+
+                    {activeTab === 'proscons' && (
+                      <div className="cnet-pros-cons-card">
+                        <div className="cnet-pros-cons-header">
+                          <div>{articleDetail.products[0]?.name || "Product"} — PROS & CONS</div>
+                          <div style={{ fontSize: '13px', color: 'var(--cnet-lime)' }}>CONSENSUS VERDICT</div>
+                        </div>
+
+                        <div className="cnet-pros-cons-grid">
+                          {/* PROS Column */}
+                          <div className="cnet-pros-column">
+                            <div className="cnet-pros-title">
+                              <span className="cnet-pro-icon">✓</span>
+                              THE GOOD (PROS)
+                            </div>
+                            {articleDetail.products[0]?.pros?.map((p, i) => (
+                              <div key={i} className="cnet-pro-con-item">
+                                <span className="cnet-pro-icon">✓</span>
+                                <div>{p.text}</div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* CONS Column */}
+                          <div className="cnet-cons-column">
+                            <div className="cnet-cons-title">
+                              <span className="cnet-con-icon">✕</span>
+                              THE BAD (CONS)
+                            </div>
+                            {articleDetail.products[0]?.cons?.map((c, i) => (
+                              <div key={i} className="cnet-pro-con-item">
+                                <span className="cnet-con-icon">✕</span>
+                                <div>{c.text}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {activeTab === 'specs' && (
+                      <div className="cnet-specs-table-box">
+                        <table className="cnet-specs-table">
+                          <thead>
+                            <tr>
+                              <th>Feature Specification</th>
+                              <th>Details</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {articleDetail.products.map(product => 
+                              Object.entries(product.specs || {}).map(([key, val]) => (
+                                <tr key={key}>
+                                  <td className="cnet-spec-key">{key}</td>
+                                  <td className="cnet-spec-val">{String(val)}</td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
-                </aside>
+
+                  {/* Right Column: Sticky Score & Buy Box */}
+                  <aside>
+                    <div className="cnet-sidebar-card">
+                      <div className="cnet-score-box">
+                        <div className="cnet-score-num">
+                          {articleDetail.products[0]?.rating || "4.5"}
+                        </div>
+                        <div className="cnet-score-label">PROVENPICK CONSENSUS SCORE</div>
+                      </div>
+
+                      <div style={{ marginBottom: '20px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', color: '#777', marginBottom: '4px' }}>
+                          MSRP / STARTING PRICE
+                        </div>
+                        <div style={{ fontSize: '28px', fontWeight: '900', color: '#111' }}>
+                          ₹{articleDetail.products[0]?.price_inr || "39,999"}
+                        </div>
+                      </div>
+
+                      {articleDetail.products.map(product => 
+                        product.affiliate_links?.map(link => (
+                          <button 
+                            key={link.id} 
+                            className="cnet-buy-btn"
+                            onClick={() => handleAffiliateClick(link.id, link.tracked_url)}
+                          >
+                            CHECK PRICE ON {link.platform.toUpperCase()} 🛒
+                          </button>
+                        ))
+                      )}
+
+                      <div style={{ fontSize: '11px', color: '#888', textAlign: 'center', marginTop: '12px', lineHeight: '1.4' }}>
+                        When you buy through links on our site, we may earn an affiliate commission.
+                      </div>
+                    </div>
+                  </aside>
+                </div>
               </div>
             )}
           </>
         )}
-      </main>
+      </div>
     </div>
   );
 }

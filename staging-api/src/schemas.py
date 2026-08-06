@@ -82,6 +82,7 @@ class StagingProductReviewOut(BaseModel):
     image_urls: List[str]
     mindmap_mermaid: Optional[str]
     status: str
+    is_featured: Optional[bool] = False
     rejection_count: int
     editor_comments: Optional[str]
     submitted_at: datetime
