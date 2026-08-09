@@ -15,7 +15,6 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from src.db.models import TranscriptCache, PipelineJob
 from src.db.session import AsyncSessionFactory
-from src.services.lightrag_service import lightrag_manager
 from src.orchestrator.state import OrchestratorState
 
 logger = structlog.get_logger()
@@ -239,8 +238,7 @@ Ensure that sections content_html contains valid HTML text (use <p>, <h3>, <stro
 async def run_scribe_agent(state: OrchestratorState) -> OrchestratorState:
     """
     Scribe Agent Node:
-    Downloads transcript, indexes into LightRAG Neo4j, queries the graph,
-    and runs Gemini 1.5 Pro to generate a comprehensive structured product review.
+    Downloads transcript and runs Gemini 1.5 Pro to generate a comprehensive structured product review.
     """
     logger.info("Scribe Agent: Starting task execution", job_uuid=str(state["job_uuid"]))
     
@@ -253,7 +251,7 @@ async def run_scribe_agent(state: OrchestratorState) -> OrchestratorState:
         state["status"] = "failed"
         return state
 
-    # Step 2: Direct transcript context (Neo4j / LightRAG removed to save API cost)
+    # Step 2: Direct transcript context
     logger.info("Scribe Agent: Using raw transcript context directly for review writing.")
     rag_context = transcript[:35000]
 
