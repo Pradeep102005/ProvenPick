@@ -9,7 +9,7 @@ load_dotenv(r"/var/www/ProvenPick/.env")
 if not os.environ.get("PRODUCTION_DATABASE_URL"):
     load_dotenv(r"c:\Users\prade\Desktop\ProvenPick\.env")
 
-PROD_DB = os.environ.get("PRODUCTION_DATABASE_URL")
+PROD_DB = os.environ.get("PRODUCTION_DATABASE_URL") or "postgresql+asyncpg://provenpick:provenpick123@127.0.0.1:5432/provenpick_production"
 
 TAXONOMY = [
     {

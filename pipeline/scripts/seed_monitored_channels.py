@@ -9,7 +9,7 @@ load_dotenv(r"/var/www/ProvenPick/.env")
 if not os.environ.get("WORKFLOW_DATABASE_URL"):
     load_dotenv(r"c:\Users\prade\Desktop\ProvenPick\.env")
 
-WORKFLOW_DB = os.environ.get("WORKFLOW_DATABASE_URL")
+WORKFLOW_DB = os.environ.get("WORKFLOW_DATABASE_URL") or "postgresql+asyncpg://provenpick:provenpick123@127.0.0.1:5432/provenpick_workflow"
 
 CHANNELS = [
     # Electronics
