@@ -1,6 +1,10 @@
 import asyncio
 import os
 import sys
+
+sys.path.insert(0, r"/var/www/ProvenPick/pipeline")
+sys.path.insert(0, r"c:\Users\prade\Desktop\ProvenPick\pipeline")
+
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
 from dotenv import load_dotenv
@@ -10,6 +14,8 @@ if not os.environ.get("WORKFLOW_DATABASE_URL"):
     load_dotenv(r"c:\Users\prade\Desktop\ProvenPick\.env")
 
 WORKFLOW_DB = os.environ.get("WORKFLOW_DATABASE_URL") or "postgresql+asyncpg://provenpick:provenpick123@127.0.0.1:5432/provenpick_workflow"
+
+from src.db.models import Base
 
 CHANNELS = [
     # Electronics
@@ -46,6 +52,12 @@ CHANNELS = [
 
 async def main():
     engine = create_async_engine(WORKFLOW_DB)
+    
+    # Auto-create tables if missing
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        print("Ensured workflow database tables exist.")
+
     async with engine.begin() as conn:
         print("Seeding 20 YouTube channels into workflow database...")
         for ch in CHANNELS:
