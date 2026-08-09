@@ -21,13 +21,10 @@ logger = structlog.get_logger()
 from src.db.session import create_tables, AsyncSessionFactory
 from src.db.models import PipelineJob
 from src.services.redis_client import redis_client
-from src.services.lightrag_service import lightrag_manager
 from src.agents.scout_agent import run_channel_scan
 from src.orchestrator.supervisor import pipeline_app
 
 PIPELINE_QUEUE = os.environ.get("PIPELINE_QUEUE", "provenpick:pipeline_queue")
-SCAN_HOUR = int(os.environ.get("SCAN_HOUR", 6))
-SCAN_MINUTE = int(os.environ.get("SCAN_MINUTE", 0))
 
 async def process_job(payload: dict):
     """
@@ -109,12 +106,6 @@ async def start_queue_worker():
         logger.error("Pipeline Worker: Redis connection failed! Check if Redis container is running.")
         return
 
-    # Pre-warm LightRAG Neo4j connection on startup
-    try:
-        await lightrag_manager.get_rag_instance()
-    except Exception as e:
-        logger.error("Pipeline Worker: Failed to establish LightRAG Neo4j connection on startup", error=str(e))
-
     while True:
         try:
             # Block-pop from queue (waits until a payload is pushed)
@@ -122,6 +113,8 @@ async def start_queue_worker():
             if job_payload:
                 # Run sequential to prevent transient 429 rate limit exceptions on free tier API
                 await process_job(job_payload)
+            else:
+                await asyncio.sleep(2)
         except Exception as e:
             logger.error("Pipeline Worker: Error inside polling loop", error=str(e))
             await asyncio.sleep(5)
