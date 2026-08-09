@@ -25,10 +25,6 @@ os.makedirs(SCRATCH_DIR, exist_ok=True)
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ProvenPick json3 Transcript Extractor with iOS/Android Client Fallback
-# ─────────────────────────────────────────────────────────────────────────────
-
 def parse_json3_transcript(content: dict) -> str:
     full_text = []
     for event in content.get("events", []):
@@ -41,29 +37,38 @@ def parse_json3_transcript(content: dict) -> str:
 
 async def fetch_transcript_with_ytdlp(video_id: str) -> tuple[str, str]:
     """
-    Fetches exact YouTube video transcript using youtube-transcript-api
-    or yt-dlp with iOS/Android client headers to bypass datacenter IP blocks.
+    Fetches exact YouTube video transcript using youtube-transcript-api (list + fetch)
+    or yt-dlp with android player_client.
     """
     loop = asyncio.get_event_loop()
     url = f"https://www.youtube.com/watch?v={video_id}"
     supported_langs = ["en", "hi", "te", "ta", "ml", "kn", "mr"]
     
-    # Method 1: Try youtube_transcript_api direct get_transcript
+    # Method 1: youtube_transcript_api instantiator (.list + .fetch)
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
-        parts = await loop.run_in_executor(
-            None,
-            lambda: YouTubeTranscriptApi.get_transcript(video_id, languages=supported_langs)
-        )
-        text_segments = [p.get("text", "") for p in parts if isinstance(p, dict)]
+        api = YouTubeTranscriptApi()
+        transcript_list = await loop.run_in_executor(None, lambda: api.list(video_id))
+        try:
+            transcript = transcript_list.find_transcript(supported_langs)
+        except Exception:
+            transcript = next(iter(transcript_list))
+            
+        parts = await loop.run_in_executor(None, lambda: transcript.fetch())
+        text_segments = []
+        for p in parts:
+            if isinstance(p, dict):
+                text_segments.append(p.get("text", ""))
+            else:
+                text_segments.append(getattr(p, "text", ""))
         clean_text = re.sub(r'\s+', ' ', " ".join(text_segments)).strip()
         if len(clean_text) > 100:
             logger.info("Successfully fetched transcript via youtube-transcript-api", video_id=video_id)
-            return "en", clean_text
+            return transcript.language_code, clean_text
     except Exception as e:
-        logger.warn("youtube-transcript-api direct fetch failed, trying yt-dlp iOS client", video_id=video_id, error=str(e))
+        logger.warn("youtube-transcript-api list/fetch failed", video_id=video_id, error=str(e))
 
-    # Method 2: Fallback to yt-dlp using iOS/Android player client
+    # Method 2: Fallback to yt-dlp with android client
     try:
         ydl_opts = {
             "writesubtitles": True,
@@ -73,7 +78,7 @@ async def fetch_transcript_with_ytdlp(video_id: str) -> tuple[str, str]:
             "subtitlesformat": "json3",
             "quiet": True,
             "no_warnings": True,
-            "extractor_args": {"youtube": {"player_client": ["ios", "android"]}}
+            "extractor_args": {"youtube": {"player_client": ["android"]}}
         }
 
         def _extract():
