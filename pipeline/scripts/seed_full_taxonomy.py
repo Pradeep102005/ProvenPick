@@ -148,14 +148,15 @@ async def main():
         
     async with engine.begin() as conn:
         print("Seeding category taxonomy...")
-        try:
-            await conn.execute(text("TRUNCATE TABLE l3_categories, l2_categories, l1_categories RESTART IDENTITY CASCADE;"))
-        except Exception:
-            pass
         
         for l1_item in TAXONOMY:
             res_l1 = await conn.execute(
-                text("INSERT INTO l1_categories (name, slug, icon) VALUES (:name, :slug, :icon) RETURNING id;"),
+                text("""
+                    INSERT INTO l1_categories (name, slug, icon)
+                    VALUES (:name, :slug, :icon)
+                    ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, icon = EXCLUDED.icon
+                    RETURNING id;
+                """),
                 {"name": l1_item["l1_name"], "slug": l1_item["l1_slug"], "icon": l1_item["icon"]}
             )
             l1_id = res_l1.scalar_one()
@@ -163,7 +164,12 @@ async def main():
             
             for l2_item in l1_item["l2_categories"]:
                 res_l2 = await conn.execute(
-                    text("INSERT INTO l2_categories (l1_id, name, slug) VALUES (:l1_id, :name, :slug) RETURNING id;"),
+                    text("""
+                        INSERT INTO l2_categories (l1_id, name, slug)
+                        VALUES (:l1_id, :name, :slug)
+                        ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, l1_id = EXCLUDED.l1_id
+                        RETURNING id;
+                    """),
                     {"l1_id": l1_id, "name": l2_item["l2_name"], "slug": l2_item["l2_slug"]}
                 )
                 l2_id = res_l2.scalar_one()
@@ -171,7 +177,11 @@ async def main():
                 for l3_name in l2_item["l3"]:
                     l3_slug = f"{l2_item['l2_slug']}-{l3_name.lower().replace(' ', '-')}"
                     await conn.execute(
-                        text("INSERT INTO l3_categories (l2_id, name, slug) VALUES (:l2_id, :name, :slug);"),
+                        text("""
+                            INSERT INTO l3_categories (l2_id, name, slug)
+                            VALUES (:l2_id, :name, :slug)
+                            ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, l2_id = EXCLUDED.l2_id;
+                        """),
                         {"l2_id": l2_id, "name": l3_name, "slug": l3_slug}
                     )
                     
