@@ -19,35 +19,35 @@ from src.db.models import Base
 
 CHANNELS = [
     # Electronics
-    {"channel_id": "UCgWi34h4-6s5JbJd_U601qA", "channel_name": "Geekyranjit", "category": "Electronics"},
-    {"channel_id": "UCp1q4i1WcZ8J-Cj-rXp4Z7A", "channel_name": "Beebom", "category": "Electronics"},
+    {"channel_id": "UCO2WJZKQoDW4Te6NHx4KfTg", "channel_name": "Geekyranjit", "category": "Electronics"},
+    {"channel_id": "UCvpfclapgcuJo0M_x65pfRw", "channel_name": "Beebom", "category": "Electronics"},
     # Computer Accessories
-    {"channel_id": "UCosNW_a1tP89qZpP2N4Z8XA", "channel_name": "Hardware Canucks", "category": "Computer Accessories"},
-    {"channel_id": "UC4R8-N8kQ1cZ2X1N1_p8A2g", "channel_name": "TechWiser", "category": "Computer Accessories"},
+    {"channel_id": "UCTzLRZUgelatKZ4nyIKcAbg", "channel_name": "Hardware Canucks", "category": "Computer Accessories"},
+    {"channel_id": "UCdp6GUwjKscp5ST4M4WgIpw", "channel_name": "TechWiser", "category": "Computer Accessories"},
     # Audio
-    {"channel_id": "UC4R8-N8kQ1cZ2X1N1_p8A2h", "channel_name": "DHRME", "category": "Audio"},
-    {"channel_id": "UC4R8-N8kQ1cZ2X1N1_p8A2i", "channel_name": "Joshua Valour", "category": "Audio"},
+    {"channel_id": "UCS2MOjih52hqzk9YljFvdhw", "channel_name": "DHRME", "category": "Audio"},
+    {"channel_id": "UCx9bOYEjkevIDYONBAstK-A", "channel_name": "Joshua Valour", "category": "Audio"},
     # Home Appliances
-    {"channel_id": "UC4R8-N8kQ1cZ2X1N1_p8A2j", "channel_name": "Vacuum Wars", "category": "Home Appliances"},
-    {"channel_id": "UC4R8-N8kQ1cZ2X1N1_p8A2k", "channel_name": "Just A Dad Videos", "category": "Home Appliances"},
+    {"channel_id": "UCvavJlMjlTd4wLwi9yKCtew", "channel_name": "Vacuum Wars", "category": "Home Appliances"},
+    {"channel_id": "UCdp6GUwjKscp5ST4M4WgIpw", "channel_name": "TechWiser Appliances", "category": "Home Appliances"},
     # Kitchen Appliances
-    {"channel_id": "UC4R8-N8kQ1cZ2X1N1_p8A2l", "channel_name": "America's Test Kitchen", "category": "Kitchen Appliances"},
-    {"channel_id": "UC4R8-N8kQ1cZ2X1N1_p8A2m", "channel_name": "Ethan Chlebowski", "category": "Kitchen Appliances"},
+    {"channel_id": "UCxAS_aK7sS2x_bqnlJHDSHw", "channel_name": "America's Test Kitchen", "category": "Kitchen Appliances"},
+    {"channel_id": "UCDq5v10l4wkV5-ZBIJJFbzQ", "channel_name": "Ethan Chlebowski", "category": "Kitchen Appliances"},
     # Gaming
     {"channel_id": "UCXuqSBlHAE6Xw-yeJA0Tunw", "channel_name": "Linus Tech Tips", "category": "Gaming"},
-    {"channel_id": "UCl2mFZoRqjw_ELbB45zpGZQ", "channel_name": "Gamers Nexus", "category": "Gaming"},
+    {"channel_id": "UChIs72whgZI9w6d6FhwGGHA", "channel_name": "Gamers Nexus", "category": "Gaming"},
     # Smart Home
-    {"channel_id": "UC4R8-N8kQ1cZ2X1N1_p8A2n", "channel_name": "Smart Home Solver", "category": "Smart Home"},
-    {"channel_id": "UC4R8-N8kQ1cZ2X1N1_p8A2o", "channel_name": "Shane Whatley", "category": "Smart Home"},
+    {"channel_id": "UCwOBG77Tm8cE24FPxHb_abw", "channel_name": "Smart Home Solver", "category": "Smart Home"},
+    {"channel_id": "UCVYd9HVKN-LeYNM_wc1P2HA", "channel_name": "Shane Whatley", "category": "Smart Home"},
     # Networking
-    {"channel_id": "UCg9bLg2w-P1-X7y_V4_8h9A", "channel_name": "NetworkChuck", "category": "Networking"},
-    {"channel_id": "UC4R8-N8kQ1cZ2X1N1_p8A2p", "channel_name": "Crosstalk Solutions", "category": "Networking"},
+    {"channel_id": "UC9x0AN7BWHpCDHSm9NiJFJQ", "channel_name": "NetworkChuck", "category": "Networking"},
+    {"channel_id": "UCVS6ejD9NLZvjsvhcbiDzjw", "channel_name": "Crosstalk Solutions", "category": "Networking"},
     # Wearables
-    {"channel_id": "UC4R8-N8kQ1cZ2X1N1_p8A2q", "channel_name": "DesFit", "category": "Wearables"},
-    {"channel_id": "UC4R8-N8kQ1cZ2X1N1_p8A2r", "channel_name": "The Quantified Scientist", "category": "Wearables"},
+    {"channel_id": "UCmVhS0qulkRshtLrXMeMToQ", "channel_name": "DesFit", "category": "Wearables"},
+    {"channel_id": "UChNWxrTlmh4IRSevon1X93g", "channel_name": "The Quantified Scientist", "category": "Wearables"},
     # Office / Productivity
-    {"channel_id": "UC4R8-N8kQ1cZ2X1N1_p8A2s", "channel_name": "Matthew Encina", "category": "Office / Productivity"},
-    {"channel_id": "UC4R8-N8kQ1cZ2X1N1_p8A2t", "channel_name": "The Tech Chap", "category": "Office / Productivity"}
+    {"channel_id": "UCSLeoz5odIGS2GdlbHbCAUg", "channel_name": "Matthew Encina", "category": "Office / Productivity"},
+    {"channel_id": "UCzlXf-yUIaOpOjEjPrOO9TA", "channel_name": "The Tech Chap", "category": "Office / Productivity"}
 ]
 
 async def main():
@@ -59,7 +59,10 @@ async def main():
         print("Ensured workflow database tables exist.")
 
     async with engine.begin() as conn:
-        print("Seeding 20 YouTube channels into workflow database...")
+        print("Cleaning old test channel IDs...")
+        await conn.execute(text("DELETE FROM channels WHERE channel_id LIKE 'UC4R8-%';"))
+        
+        print("Seeding 20 real YouTube channels into workflow database...")
         for ch in CHANNELS:
             await conn.execute(
                 text("""
@@ -71,10 +74,10 @@ async def main():
                 """),
                 {"cid": ch["channel_id"], "cname": ch["channel_name"]}
             )
-            print(f" - Seeded Channel: {ch['channel_name']} [{ch['category']}]")
+            print(f" - Seeded Real Channel: {ch['channel_name']} [{ch['category']}]")
             
     await engine.dispose()
-    print("All 20 channels successfully registered in PostgreSQL workflow DB!")
+    print("All 20 real YouTube channels successfully registered in PostgreSQL workflow DB!")
 
 if __name__ == "__main__":
     asyncio.run(main())
