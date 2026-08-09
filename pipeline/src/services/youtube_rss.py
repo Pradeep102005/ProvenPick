@@ -9,17 +9,6 @@ async def get_latest_videos(channel_id: str) -> List[Dict[str, Any]]:
     """
     Fetch the latest 15 videos of a YouTube channel using its public XML/RSS feed.
     Does not require a YouTube Data API v3 key or consume API quota limits.
-    
-    Returns a list of dicts:
-    [
-        {
-            "video_id": "xxxx",
-            "video_title": "Sony WH-CH520 Full Review",
-            "video_url": "https://www.youtube.com/watch?v=xxxx",
-            "channel_name": "AudioTester",
-            "channel_id": "UCxxxx"
-        }
-    ]
     """
     feed_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
     videos = []
@@ -31,18 +20,20 @@ async def get_latest_videos(channel_id: str) -> List[Dict[str, Any]]:
                 logger.error("Failed to fetch YouTube RSS feed", channel_id=channel_id, status_code=resp.status_code)
                 return []
 
-            # We parse using 'xml' feature of BeautifulSoup (requires bs4 + lxml or standard features)
-            # Fallback to html.parser if lxml parser isn't installed
-            soup = BeautifulSoup(resp.content, "xml")
+            # Try parsing with xml or fallback to html.parser
+            try:
+                soup = BeautifulSoup(resp.content, "xml")
+            except Exception:
+                soup = BeautifulSoup(resp.content, "html.parser")
+                
             entries = soup.find_all("entry")
 
             for entry in entries:
                 # 1. Parse video ID
-                video_id_tag = entry.find("yt:videoId")
+                video_id_tag = entry.find("yt:videoid") or entry.find("yt:videoId") or entry.find("videoid")
                 if video_id_tag:
                     video_id = video_id_tag.text.strip()
                 else:
-                    # Fallback string parsing of <id> e.g. "yt:video:VIDEO_ID"
                     id_tag = entry.find("id")
                     if id_tag and "yt:video:" in id_tag.text:
                         video_id = id_tag.text.split(":")[-1].strip()
