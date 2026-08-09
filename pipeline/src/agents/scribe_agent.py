@@ -26,11 +26,10 @@ os.makedirs(SCRATCH_DIR, exist_ok=True)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Friend's ProvenPick json3 Transcript Extractor (From complete_workflow)
+# ProvenPick json3 Transcript Extractor with iOS/Android Client Fallback
 # ─────────────────────────────────────────────────────────────────────────────
 
 def parse_json3_transcript(content: dict) -> str:
-    """Parses YouTube json3 format subtitle events into clean continuous transcript text."""
     full_text = []
     for event in content.get("events", []):
         segs = event.get("segs", [])
@@ -42,13 +41,29 @@ def parse_json3_transcript(content: dict) -> str:
 
 async def fetch_transcript_with_ytdlp(video_id: str) -> tuple[str, str]:
     """
-    Fetches exact YouTube video transcript using yt-dlp + Google CDN json3 endpoint.
-    Bypasses datacenter IP blocks because caption URLs are served over public CDN.
+    Fetches exact YouTube video transcript using youtube-transcript-api
+    or yt-dlp with iOS/Android client headers to bypass datacenter IP blocks.
     """
     loop = asyncio.get_event_loop()
     url = f"https://www.youtube.com/watch?v={video_id}"
     supported_langs = ["en", "hi", "te", "ta", "ml", "kn", "mr"]
     
+    # Method 1: Try youtube_transcript_api direct get_transcript
+    try:
+        from youtube_transcript_api import YouTubeTranscriptApi
+        parts = await loop.run_in_executor(
+            None,
+            lambda: YouTubeTranscriptApi.get_transcript(video_id, languages=supported_langs)
+        )
+        text_segments = [p.get("text", "") for p in parts if isinstance(p, dict)]
+        clean_text = re.sub(r'\s+', ' ', " ".join(text_segments)).strip()
+        if len(clean_text) > 100:
+            logger.info("Successfully fetched transcript via youtube-transcript-api", video_id=video_id)
+            return "en", clean_text
+    except Exception as e:
+        logger.warn("youtube-transcript-api direct fetch failed, trying yt-dlp iOS client", video_id=video_id, error=str(e))
+
+    # Method 2: Fallback to yt-dlp using iOS/Android player client
     try:
         ydl_opts = {
             "writesubtitles": True,
@@ -58,6 +73,7 @@ async def fetch_transcript_with_ytdlp(video_id: str) -> tuple[str, str]:
             "subtitlesformat": "json3",
             "quiet": True,
             "no_warnings": True,
+            "extractor_args": {"youtube": {"player_client": ["ios", "android"]}}
         }
 
         def _extract():
@@ -88,16 +104,14 @@ async def fetch_transcript_with_ytdlp(video_id: str) -> tuple[str, str]:
                     break
 
         if not caption_url:
-            raise ValueError(f"No json3 subtitles found for video {video_id}")
+            raise ValueError(f"No subtitles found for video {video_id}")
 
-        # Fetch caption content over Google CDN using httpx
         async with httpx.AsyncClient(verify=False, timeout=20.0) as client:
             resp = await client.get(caption_url)
             resp.raise_for_status()
             content = resp.json()
 
         transcript = parse_json3_transcript(content)
-
         if not transcript.strip():
             raise ValueError(f"Extracted transcript is empty for video {video_id}")
 
@@ -113,10 +127,6 @@ async def fetch_transcript_with_ytdlp(video_id: str) -> tuple[str, str]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def get_or_create_transcript(video_id: str) -> str:
-    """
-    Retrieves transcript from PostgreSQL cache. If missing, extracts it via
-    json3 CDN, translates non-English content using LLM, and caches the result.
-    """
     async with AsyncSessionFactory() as session:
         stmt = select(TranscriptCache).where(TranscriptCache.video_id == video_id)
         res = await session.execute(stmt)
@@ -143,7 +153,7 @@ async def get_or_create_transcript(video_id: str) -> str:
                 "You are a professional translator. Translate this YouTube video transcript from its original language into clean, fluent, and grammatical English. Do not add commentary. Return ONLY the translated transcript text.\n\nTranscript:\n{transcript}"
             )
             translator_llm = ChatGoogleGenerativeAI(
-                model="gemini-1.5-flash",
+                model="gemini-1.5-flash-latest",
                 google_api_key=GEMINI_API_KEY,
                 temperature=0.1
             )
@@ -249,7 +259,7 @@ async def run_scribe_agent(state: OrchestratorState) -> OrchestratorState:
             
         prompt = ChatPromptTemplate.from_template(WRITE_REVIEW_PROMPT)
         llm_pro = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
+            model="gemini-1.5-flash-latest",
             google_api_key=GEMINI_API_KEY,
             temperature=0.2
         )

@@ -99,7 +99,7 @@ async def run_critic_agent(state: OrchestratorState) -> OrchestratorState:
             editor_comments = "None. Verify general quality, flow, spelling, and structure."
 
         llm_pro = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+            model="gemini-1.5-flash-latest",
             google_api_key=GEMINI_API_KEY,
             temperature=0.0
         )

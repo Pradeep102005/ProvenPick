@@ -40,7 +40,7 @@ async def classify_video(video_title: str) -> tuple[bool, str]:
     try:
         prompt = ChatPromptTemplate.from_template(CLASSIFICATION_PROMPT)
         llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
+            model="gemini-1.5-flash-latest",
             google_api_key=GEMINI_API_KEY,
             temperature=0.0
         )
