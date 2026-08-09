@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-const API_BASE = "http://localhost:8002/api/articles";
+const API_BASE = "/api/articles";
 
 function App() {
   const [articles, setArticles] = useState([]);
@@ -19,7 +19,7 @@ function App() {
   // Fetch DB Categories taxonomy
   const fetchCategories = async () => {
     try {
-      const res = await fetch("http://localhost:8002/api/categories");
+      const res = await fetch("/api/categories");
       if (res.ok) {
         const data = await res.json();
         setCategoriesTree(data);
@@ -182,7 +182,7 @@ function App() {
       <div className="cnet-container">
         {!selectedArticle ? (
           <>
-            {/* CNET Editorial Hero Layout (Matches Screenshot 1) */}
+            {/* CNET Editorial Hero Layout */}
             <div className="cnet-hero-grid">
               {/* Left Column: Yellow "BEST" Sidebar Box */}
               <div className="cnet-best-box">
@@ -228,7 +228,7 @@ function App() {
               ) : (
                 <div className="cnet-hero-main-card" style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '300px' }}>
                   <div style={{ textAlign: 'center', color: '#777' }}>
-                    Loading featured reviews...
+                    No published articles yet. Generating fresh articles from Scout Agent...
                   </div>
                 </div>
               )}
@@ -246,7 +246,7 @@ function App() {
               <div style={{ color: 'red', textAlign: 'center', padding: '40px' }}>Error loading guides: {error}</div>
             ) : filteredArticles.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '60px', color: '#888' }}>
-                No buying guides published yet. Publish a draft from Staging to see it live!
+                No buying guides published yet. Publish a draft from Editor Dashboard to see it live!
               </div>
             ) : (
               <div className="cnet-carousel-container">

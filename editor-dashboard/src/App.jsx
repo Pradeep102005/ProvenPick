@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-const API_BASE = "http://localhost:8001/api/reviews";
+const API_BASE = "/staging-api/reviews";
 
 function App() {
   const [reviews, setReviews] = useState([]);
@@ -363,8 +363,6 @@ function App() {
           </div>
         )}
       </main>
-
-
 
       {/* Reject Modal */}
       {showRejectModal && (
