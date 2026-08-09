@@ -18,10 +18,15 @@ def router_critic_next(state: OrchestratorState) -> str:
     Decides the next node to execute after the Critic node audits the review.
     """
     status = state.get("status")
+    attempts = state.get("attempt_count", 0)
+    
     if status == "enriching":
         logger.info("Supervisor Routing: Critic passed. Routing to Enricher.")
         return "enricher"
     elif status == "rejected":
+        if attempts >= 2:
+            logger.error("Supervisor Routing: Max retry attempts (2) reached or failed job. Terminating job.", job_uuid=str(state.get("job_uuid")))
+            return "end"
         logger.warn("Supervisor Routing: Critic rejected. Routing back to Scribe for rewrite.")
         return "scribe"
     else:
