@@ -1,42 +1,18 @@
-# ProvenPick Pipeline — Python Dependencies
-
-# ── Core ──────────────────────────────────────────────────────────────────────
-python-dotenv==1.0.1
-pydantic==2.7.1
-
-# ── AI / LangChain ────────────────────────────────────────────────────────────
-langchain==0.2.5
-langchain-google-genai==1.0.6
-langgraph==0.1.19
-lightrag-hku==0.0.5
-
-# ── Database ──────────────────────────────────────────────────────────────────
-sqlalchemy[asyncio]==2.0.30
-asyncpg==0.29.0                  # Async PostgreSQL driver
-alembic==1.13.1                  # DB migrations
-
-# ── Neo4j ─────────────────────────────────────────────────────────────────────
-neo4j==5.20.0
-
-# ── Redis ─────────────────────────────────────────────────────────────────────
-redis[asyncio]==5.0.4
-
-# ── YouTube / Transcript ──────────────────────────────────────────────────────
-yt-dlp==2024.5.27
-httpx==0.27.0
-langdetect==1.0.9
-
-# ── Scheduler ─────────────────────────────────────────────────────────────────
-apscheduler==3.10.4
-
-# ── Image Fetching ────────────────────────────────────────────────────────────
-requests==2.32.3
-beautifulsoup4==4.12.3
-Pillow==10.3.0
-
-# ── Mermaid Rendering ─────────────────────────────────────────────────────────
-playwright==1.44.0               # Renders Mermaid diagrams to PNG
-
-# ── Utilities ─────────────────────────────────────────────────────────────────
-tenacity==8.3.0                  # Retry logic for API calls
-structlog==24.2.0                # Structured logging
+# ProvenPick Pipeline — Core Python Dependencies
+python-dotenv
+pydantic
+langchain
+langchain-google-genai
+langgraph
+sqlalchemy[asyncio]
+asyncpg
+redis[asyncio]
+yt-dlp
+youtube-transcript-api
+httpx
+langdetect
+apscheduler
+requests
+beautifulsoup4
+tenacity
+structlog

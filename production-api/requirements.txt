@@ -1,8 +1,11 @@
-# ProvenPick Production API — Python Dependencies
-python-dotenv==1.0.1
-fastapi==0.111.0
-uvicorn[standard]==0.29.0
-sqlalchemy[asyncio]==2.0.30
-asyncpg==0.29.0
-alembic==1.13.1
-pydantic==2.7.1
+# ProvenPick Production API Dependencies
+python-dotenv
+fastapi
+uvicorn[standard]
+sqlalchemy[asyncio]
+asyncpg
+pydantic
+structlog
+langchain-google-genai
+langchain-core
+httpx
