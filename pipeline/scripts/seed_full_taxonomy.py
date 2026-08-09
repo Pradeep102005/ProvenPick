@@ -147,8 +147,11 @@ async def main():
         print("Ensured database tables exist.")
         
     async with engine.begin() as conn:
-        print("Clearing and re-seeding full category taxonomy (No Emojis)...")
-        await conn.execute(text("TRUNCATE TABLE l3_categories, l2_categories, l1_categories RESTART IDENTITY CASCADE;"))
+        print("Seeding category taxonomy...")
+        try:
+            await conn.execute(text("TRUNCATE TABLE l3_categories, l2_categories, l1_categories RESTART IDENTITY CASCADE;"))
+        except Exception:
+            pass
         
         for l1_item in TAXONOMY:
             res_l1 = await conn.execute(
