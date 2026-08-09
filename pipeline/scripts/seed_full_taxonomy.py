@@ -2,8 +2,8 @@ import asyncio
 import os
 import sys
 
-sys.path.insert(0, r"/var/www/ProvenPick/pipeline")
-sys.path.insert(0, r"c:\Users\prade\Desktop\ProvenPick\pipeline")
+sys.path.insert(0, r"/var/www/ProvenPick/production-api")
+sys.path.insert(0, r"c:\Users\prade\Desktop\ProvenPick\production-api")
 
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
@@ -141,10 +141,10 @@ TAXONOMY = [
 async def main():
     engine = create_async_engine(PROD_DB)
     
-    # Auto-create tables if missing
+    # Auto-create tables if missing from production-api Base metadata
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        print("Ensured database tables exist.")
+        print("Ensured production database tables exist.")
         
     async with engine.begin() as conn:
         print("Seeding category taxonomy...")
