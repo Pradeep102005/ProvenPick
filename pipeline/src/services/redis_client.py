@@ -11,7 +11,7 @@ class RedisClient:
     Used for communication between the YouTube Scout Agent and Scribe Agents.
     """
     def __init__(self):
-        self.client = redis.from_url(REDIS_URL, decode_responses=True)
+        self.client = redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=30.0)
 
     async def push_to_queue(self, queue_name: str, payload: Dict[str, Any]) -> int:
         """
@@ -22,18 +22,14 @@ class RedisClient:
 
     async def pop_from_queue(self, queue_name: str, timeout: int = 0) -> Optional[Dict[str, Any]]:
         """
-        Pop a JSON payload from the left (head) of a Redis list.
-        Supports blocking pop (blpop) if timeout > 0.
+        Pop a JSON payload from the left (head) of a Redis list using non-blocking lpop.
         """
-        if timeout > 0:
-            res = await self.client.blpop(queue_name, timeout=timeout)
-            if res:
-                _, element = res
-                return json.loads(element)
-        else:
+        try:
             element = await self.client.lpop(queue_name)
             if element:
                 return json.loads(element)
+        except Exception:
+            pass
         return None
 
     async def ping(self) -> bool:
