@@ -37,18 +37,19 @@ def parse_json3_transcript(content: dict) -> str:
 
 async def fetch_transcript_with_ytdlp(video_id: str) -> tuple[str, str]:
     """
-    Fetches YouTube video transcript using youtube-transcript-api or yt-dlp
-    with mweb/web_embedded client overrides to bypass AWS Cloud IP blocks.
+    Fetches YouTube video transcript using youtube-transcript-api or yt-dlp.
     """
     loop = asyncio.get_event_loop()
     url = f"https://www.youtube.com/watch?v={video_id}"
     supported_langs = ["en", "hi", "te", "ta", "ml", "kn", "mr"]
     
-    # Method 1: Try youtube_transcript_api
+    # Method 1: YouTubeTranscriptApi static list_transcripts method
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
-        api = YouTubeTranscriptApi()
-        transcript_list = await loop.run_in_executor(None, lambda: api.list(video_id))
+        transcript_list = await loop.run_in_executor(
+            None,
+            lambda: YouTubeTranscriptApi.list_transcripts(video_id)
+        )
         try:
             transcript = transcript_list.find_transcript(supported_langs)
         except Exception:
@@ -66,9 +67,9 @@ async def fetch_transcript_with_ytdlp(video_id: str) -> tuple[str, str]:
             logger.info("Successfully fetched transcript via youtube-transcript-api", video_id=video_id)
             return transcript.language_code, clean_text
     except Exception as e:
-        logger.warn("youtube-transcript-api list/fetch failed", video_id=video_id, error=str(e))
+        logger.warn("youtube-transcript-api list_transcripts failed", video_id=video_id, error=str(e))
 
-    # Method 2: Try yt-dlp with mweb / web_embedded / android_creator clients
+    # Method 2: Fallback to yt-dlp with player clients
     for client_type in [["mweb"], ["web_embedded"], ["android_creator"], ["tv_embedded"]]:
         try:
             ydl_opts = {
@@ -122,8 +123,8 @@ async def fetch_transcript_with_ytdlp(video_id: str) -> tuple[str, str]:
         except Exception as e:
             continue
 
-    # Method 3: Metadata / Description fallback if YouTube blocks all transcript endpoints on Cloud IP
-    logger.warn("YouTube blocked cloud IP for transcript files, using Video Title & Description fallback", video_id=video_id)
+    # Method 3: Fallback metadata context
+    logger.warn("YouTube blocked cloud IP for transcript files, using Video Title & Context fallback", video_id=video_id)
     return "en", f"Target YouTube Video ID: {video_id}"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -157,7 +158,7 @@ async def get_or_create_transcript(video_id: str) -> str:
                 "You are a professional translator. Translate this YouTube video transcript from its original language into clean, fluent, and grammatical English. Do not add commentary. Return ONLY the translated transcript text.\n\nTranscript:\n{transcript}"
             )
             translator_llm = ChatGoogleGenerativeAI(
-                model="gemini-1.5-flash-latest",
+                model="gemini-2.5-flash",
                 google_api_key=GEMINI_API_KEY,
                 temperature=0.1
             )
@@ -261,7 +262,7 @@ async def run_scribe_agent(state: OrchestratorState) -> OrchestratorState:
             
         prompt = ChatPromptTemplate.from_template(WRITE_REVIEW_PROMPT)
         llm_pro = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash-latest",
+            model="gemini-2.5-flash",
             google_api_key=GEMINI_API_KEY,
             temperature=0.2
         )
