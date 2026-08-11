@@ -2,12 +2,26 @@ import { useState, useEffect } from 'react';
 
 const API_BASE = "/api/articles";
 
+const L1_CATEGORIES_LIST = [
+  "All",
+  "Electronics",
+  "Computer Accessories",
+  "Audio",
+  "Home Appliances",
+  "Kitchen Appliances",
+  "Gaming",
+  "Smart Home",
+  "Networking",
+  "Wearables",
+  "Office / Productivity",
+  "Smartphones"
+];
+
 function App() {
   const [articles, setArticles] = useState([]);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [articleDetail, setArticleDetail] = useState(null);
-  const [activeTab, setActiveTab] = useState("guide"); // guide | proscons | specs
-  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [activeTab, setActiveTab] = useState("guide");
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -16,7 +30,9 @@ function App() {
   const [selectedL1, setSelectedL1] = useState("All");
   const [selectedL2, setSelectedL2] = useState("All");
 
-  // Fetch DB Categories taxonomy
+  // BEST Carousel Slide Index
+  const [bestIndex, setBestIndex] = useState(0);
+
   const fetchCategories = async () => {
     try {
       const res = await fetch("/api/categories");
@@ -29,7 +45,6 @@ function App() {
     }
   };
 
-  // Fetch all published articles from Production API
   const fetchArticles = async () => {
     setLoading(true);
     try {
@@ -37,6 +52,7 @@ function App() {
       if (!res.ok) throw new Error("Failed to load buying guides.");
       const data = await res.json();
       setArticles(data);
+      setError(null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -49,7 +65,6 @@ function App() {
     fetchCategories();
   }, []);
 
-  // Fetch article detail by slug
   const loadArticleDetail = async (slug) => {
     setDetailLoading(true);
     try {
@@ -58,8 +73,6 @@ function App() {
       const data = await res.json();
       setArticleDetail(data);
       setActiveTab("guide");
-      
-      // Post view count increment
       fetch(`${API_BASE}/${slug}/view`, { method: "POST" }).catch(() => {});
     } catch (err) {
       alert(err.message);
@@ -84,408 +97,363 @@ function App() {
     try {
       await fetch(`${API_BASE}/affiliate/click/${linkId}`, { method: "POST" });
     } catch (err) {
-      console.error("Failed to register affiliate click event", err);
+      console.error("Failed to register affiliate click", err);
     }
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  // Get current L2 subcategory list based on selected L1
+  // Find L2 subcategories for currently selected L1
   const currentL1Obj = categoriesTree.find(c => c.name.toLowerCase() === selectedL1.toLowerCase());
   const l2Subcategories = currentL1Obj ? currentL1Obj.l2_categories : [];
 
-  // Filtered articles based on selected L1 and L2
+  // Strict Category Filtering: Only articles belonging to selected L1 & L2
   const filteredArticles = articles.filter(a => {
     const catName = (a.category_name || "").toLowerCase();
+    const titleText = (a.title || "").toLowerCase();
+    
     if (selectedL1 === "All") return true;
     
+    const l1Target = selectedL1.toLowerCase();
+    const l2Target = selectedL2.toLowerCase();
+    
     if (selectedL2 !== "All") {
-      return catName.includes(selectedL2.toLowerCase());
+      return catName.includes(l2Target) || titleText.includes(l2Target);
     }
     
-    // Check if category matches L1 or any of its L2s
-    if (catName.includes(selectedL1.toLowerCase())) return true;
-    return l2Subcategories.some(l2 => catName.includes(l2.name.toLowerCase()));
+    return catName.includes(l1Target) || titleText.includes(l1Target) ||
+      l2Subcategories.some(l2 => catName.includes(l2.name.toLowerCase()));
   });
 
-  const featuredHeroArticle = filteredArticles[0] || articles[0];
-  const sideBestArticles = (filteredArticles.length > 0 ? filteredArticles : articles).slice(0, 5);
+  // BEST Carousel Items: Pick top article per category
+  const bestCarouselItems = L1_CATEGORIES_LIST.filter(c => c !== "All").map(catName => {
+    const matched = articles.find(a => {
+      const cn = (a.category_name || "").toLowerCase();
+      const tt = (a.title || "").toLowerCase();
+      return cn.includes(catName.toLowerCase()) || tt.includes(catName.toLowerCase());
+    });
+    return {
+      category: catName,
+      article: matched || articles[0]
+    };
+  }).filter(item => item.article);
+
+  const currentBestItem = bestCarouselItems[bestIndex % (bestCarouselItems.length || 1)];
+
+  const handleNextBest = () => {
+    setBestIndex((prev) => (prev + 1) % (bestCarouselItems.length || 1));
+  };
+
+  const handlePrevBest = () => {
+    setBestIndex((prev) => (prev - 1 + bestCarouselItems.length) % (bestCarouselItems.length || 1));
+  };
 
   return (
-    <div>
-      {/* 1. Top CNET Announcement Banner */}
-      <div className="cnet-top-banner">
-        <div className="cnet-top-banner-title">
-          <span className="cnet-banner-badge">PROVENPICK</span>
+    <div className="site-wrapper" style={{ background: '#090a0f', color: '#f3f4f6', minHeight: '100vh', width: '100%' }}>
+      {/* 1. Yellow Announcement Bar */}
+      <div className="cnet-top-banner" style={{ background: '#d9f99d', color: '#111827', padding: '8px 24px', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+        <div>
+          <span style={{ background: '#111827', color: '#d9f99d', padding: '2px 8px', borderRadius: '4px', marginRight: '8px', fontSize: '11px' }}>PROVENPICK</span>
           NAVIGATING A WORLD OF ACCELERATING CHANGE
         </div>
-        <div style={{ fontSize: '13px', cursor: 'pointer' }}>⚡ EXPERT TESTED</div>
+        <div>⚡ EXPERT TESTED & VERIFIED</div>
       </div>
 
-      {/* 2. CNET Black Navigation Header with DB L1 Categories */}
-      <header className="cnet-header-dark">
-        <div className="cnet-container">
-          <div className="cnet-header-main">
-            <div className="cnet-brand" onClick={() => { setSelectedL1("All"); setSelectedL2("All"); handleBack(); }}>
-              <div className="cnet-logo-box" style={{ background: '#6366f1' }}>PROVENPICK</div>
-              <div className="cnet-tagline">VERIFIED REVIEWS • ZERO AD BIAS</div>
-            </div>
-
-            <ul className="cnet-nav-categories">
-              <li 
-                className={`cnet-nav-item ${selectedL1 === 'All' ? 'active' : ''}`}
-                onClick={() => { setSelectedL1("All"); setSelectedL2("All"); if (selectedArticle) handleBack(); }}
-              >
-                All
-              </li>
-              {categoriesTree.map(l1 => (
-                <li 
-                  key={l1.id} 
-                  className={`cnet-nav-item ${selectedL1 === l1.name ? 'active' : ''}`}
-                  onClick={() => { setSelectedL1(l1.name); setSelectedL2("All"); if (selectedArticle) handleBack(); }}
-                >
-                  {l1.name}
-                </li>
-              ))}
-            </ul>
-
-            <div className="cnet-header-actions">
-              <div className="google-preferred-btn">
-                <span>G</span> Add as preferred source on Google
-              </div>
+      {/* 2. Top Header Navbar without redundant badges */}
+      <header className="cnet-header-dark" style={{ background: '#0f172a', borderBottom: '1px solid #1e293b', padding: '14px 0' }}>
+        <div className="cnet-container" style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div 
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px' }} 
+            onClick={() => { setSelectedL1("All"); setSelectedL2("All"); handleBack(); }}
+          >
+            <div style={{ background: '#6366f1', color: '#fff', fontWeight: '900', padding: '8px 16px', borderRadius: '6px', fontSize: '20px', letterSpacing: '1px' }}>
+              PROVENPICK
             </div>
           </div>
+
+          {/* 11 Clean Horizontal Navbar Category Tabs */}
+          <nav className="cnet-nav-categories" style={{ display: 'flex', gap: '18px', overflowX: 'auto', padding: '4px 0' }}>
+            {L1_CATEGORIES_LIST.map(cat => (
+              <span
+                key={cat}
+                style={{
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: selectedL1 === cat ? 'bold' : '500',
+                  color: selectedL1 === cat ? '#a3e635' : '#cbd5e1',
+                  whiteSpace: 'nowrap',
+                  paddingBottom: '4px',
+                  borderBottom: selectedL1 === cat ? '2px solid #a3e635' : 'none'
+                }}
+                onClick={() => { setSelectedL1(cat); setSelectedL2("All"); if (selectedArticle) handleBack(); }}
+              >
+                {cat}
+              </span>
+            ))}
+          </nav>
         </div>
 
         {/* L2 Subcategory Pills Bar */}
-        <div className="cnet-subnav-bar">
-          <div className="cnet-container cnet-subnav-flex">
-            <button 
-              className={`cnet-pill ${selectedL2 === 'All' ? 'active' : ''}`}
-              onClick={() => { setSelectedL2("All"); if (selectedArticle) handleBack(); }}
-            >
-              All {selectedL1 !== "All" ? selectedL1 : "Categories"} →
-            </button>
-            {l2Subcategories.map(l2 => (
+        {l2Subcategories.length > 0 && (
+          <div style={{ background: '#090a0f', borderTop: '1px solid #1e293b', padding: '10px 0' }}>
+            <div className="cnet-container" style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 24px', display: 'flex', gap: '10px', overflowX: 'auto' }}>
               <button 
-                key={l2.id} 
-                className={`cnet-pill ${selectedL2 === l2.name ? 'active' : ''}`}
-                onClick={() => { setSelectedL2(l2.name); if (selectedArticle) handleBack(); }}
+                style={{ background: selectedL2 === 'All' ? '#6366f1' : '#1e293b', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                onClick={() => { setSelectedL2("All"); if (selectedArticle) handleBack(); }}
               >
-                {l2.name} →
+                All {selectedL1} →
               </button>
-            ))}
+              {l2Subcategories.map(l2 => (
+                <button 
+                  key={l2.id} 
+                  style={{ background: selectedL2 === l2.name ? '#6366f1' : '#1e293b', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  onClick={() => { setSelectedL2(l2.name); if (selectedArticle) handleBack(); }}
+                >
+                  {l2.name} →
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </header>
 
-      {/* Main Content Area */}
-      <div className="cnet-container">
-        {!selectedArticle ? (
-          <>
-            {/* CNET Editorial Hero Layout */}
-            <div className="cnet-hero-grid">
-              {/* Left Column: Yellow "BEST" Sidebar Box */}
-              <div className="cnet-best-box">
-                <div className="cnet-best-header">
-                  <div className="cnet-best-title">BEST</div>
-                  <div className="cnet-best-subtitle">Editors' picks and our top buying guides</div>
-                </div>
+      {/* Main Body Area */}
+      <div className="cnet-container" style={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
+        {selectedArticle ? (
+          /* Article Detail View */
+          <div>
+            <button 
+              onClick={handleBack} 
+              style={{ background: '#1e293b', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '6px', cursor: 'pointer', marginBottom: '24px' }}
+            >
+              ← Back to {selectedL1 === 'All' ? 'Home' : selectedL1}
+            </button>
 
-                <div className="cnet-best-list">
-                  {sideBestArticles.length > 0 ? (
-                    sideBestArticles.map((art, idx) => (
-                      <span key={art.id || idx} className="cnet-best-item" onClick={() => handleSelectArticle(art.slug)}>
-                        Best {art.name || art.category_name} for 2026: Expert Tested & Reviewed
-                      </span>
-                    ))
-                  ) : (
-                    <>
-                      <span className="cnet-best-item">Best Smartphones for 2026: Top Tested Picks</span>
-                      <span className="cnet-best-item">Best Flagship Performance Phones</span>
-                      <span className="cnet-best-item">Best Value Audio Devices</span>
-                      <span className="cnet-best-item">Best Battery Life Phones Tested</span>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Center/Right Big Hero Feature Card */}
-              {featuredHeroArticle ? (
-                <div className="cnet-hero-main-card" onClick={() => handleSelectArticle(featuredHeroArticle.slug)}>
-                  <div className="cnet-hero-img-box">
-                    <img 
-                      src={featuredHeroArticle.products?.[0]?.image_url || featuredHeroArticle.products?.[0]?.image_urls?.[0] || "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop&q=80"} 
-                      alt={featuredHeroArticle.title} 
-                      className="cnet-hero-img"
-                    />
-                  </div>
-                  <div className="cnet-hero-content">
-                    <div className="cnet-hero-headline">{featuredHeroArticle.title}</div>
-                    <div className="cnet-hero-summary">{featuredHeroArticle.introduction}</div>
-                    <div className="cnet-byline">By Editorial Team • 5 Min Read</div>
-                  </div>
-                </div>
-              ) : (
-                <div className="cnet-hero-main-card" style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '300px' }}>
-                  <div style={{ textAlign: 'center', color: '#777' }}>
-                    No published articles yet. Generating fresh articles from Scout Agent...
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Horizontal Flash Card Carousel Section: Trending Product Reviews */}
-            <div className="cnet-section-header">
-              <div className="cnet-section-title">Trending Product Reviews</div>
-              <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--cnet-red)', cursor: 'pointer' }}>View All →</div>
-            </div>
-
-            {loading ? (
-              <div style={{ textAlign: 'center', padding: '60px', color: '#777' }}>Loading reviews catalog...</div>
-            ) : error ? (
-              <div style={{ color: 'red', textAlign: 'center', padding: '40px' }}>Error loading guides: {error}</div>
-            ) : filteredArticles.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px', color: '#888' }}>
-                No buying guides published yet. Publish a draft from Editor Dashboard to see it live!
-              </div>
-            ) : (
-              <div className="cnet-carousel-container">
-                {filteredArticles.map(art => {
-                  const firstProd = art.products?.[0] || {};
-                  const mainImg = firstProd.image_url || firstProd.image_urls?.[0] || "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600&auto=format&fit=crop&q=80";
-                  return (
-                    <div key={art.id} className="cnet-flash-card" onClick={() => handleSelectArticle(art.slug)}>
-                      <div className="cnet-flash-img-box">
-                        <img src={mainImg} alt={art.title} className="cnet-flash-img" />
-                        <div className="cnet-rating-badge">⭐ {firstProd.rating || "4.5"}</div>
-                      </div>
-                      <div className="cnet-flash-body">
-                        <div className="cnet-flash-category">{art.category_name || "Mobile"}</div>
-                        <div className="cnet-flash-title">{art.title}</div>
-                        <div className="cnet-flash-byline">By ProvenPick Experts</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Additional Horizontal Section: Top Tested Smartphones */}
-            <div className="cnet-section-header" style={{ marginTop: '50px' }}>
-              <div className="cnet-section-title">Latest Hands-On Buying Guides</div>
-            </div>
-
-            <div className="cnet-carousel-container" style={{ marginBottom: '60px' }}>
-              {articles.map(art => {
-                const firstProd = art.products?.[0] || {};
-                const mainImg = firstProd.image_urls?.[1] || firstProd.image_urls?.[0] || "https://images.unsplash.com/photo-1598327105666-5b89351aff97?w=600&auto=format&fit=crop&q=80";
-                return (
-                  <div key={`guide-${art.id}`} className="cnet-flash-card" onClick={() => handleSelectArticle(art.slug)}>
-                    <div className="cnet-flash-img-box">
-                      <img src={mainImg} alt={art.title} className="cnet-flash-img" />
-                      <div className="cnet-rating-badge">₹{firstProd.price_inr || "39,999"}</div>
-                    </div>
-                    <div className="cnet-flash-body">
-                      <div className="cnet-flash-category">{firstProd.brand || "Tech"}</div>
-                      <div className="cnet-flash-title">{art.title}</div>
-                      <div className="cnet-flash-byline">Consensus Score: {firstProd.rating || "4.5"}/5</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        ) : (
-          /* Article Detail View (CNET Light Mode Page) */
-          <>
-            {detailLoading || !articleDetail ? (
-              <div style={{ textAlign: 'center', padding: '80px', color: '#777' }}>Loading article details...</div>
-            ) : (
-              <div>
-                {/* Back Button */}
-                <div style={{ margin: '24px 0 12px' }}>
-                  <span 
-                    onClick={handleBack} 
-                    style={{ cursor: 'pointer', fontWeight: '800', fontSize: '13px', color: 'var(--cnet-red)', textTransform: 'uppercase' }}
-                  >
-                    ← Back to ProvenPick Home
+            {detailLoading ? (
+              <div style={{ padding: '60px 0', textAlign: 'center', color: '#94a3b8' }}>Loading detailed review...</div>
+            ) : articleDetail ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '40px' }}>
+                <div>
+                  <span style={{ color: '#a3e635', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                    {articleDetail.category_name}
                   </span>
-                </div>
+                  <h1 style={{ fontSize: '36px', color: '#fff', marginTop: '8px', marginBottom: '16px', lineHeight: '1.2' }}>
+                    {articleDetail.title}
+                  </h1>
+                  <p style={{ fontSize: '18px', color: '#cbd5e1', lineHeight: '1.6', marginBottom: '24px' }}>
+                    {articleDetail.introduction}
+                  </p>
 
-                {/* Article Header */}
-                <div className="cnet-detail-header">
-                  <h1 className="cnet-detail-title">{articleDetail.title}</h1>
-                  
-                  <div className="cnet-meta-strip">
-                    <span>By <strong>ProvenPick Editorial Staff</strong></span>
-                    <span>•</span>
-                    <span>Category: <strong>{articleDetail.category.name}</strong></span>
-                    <span>•</span>
-                    <span>Published: {new Date(articleDetail.published_at).toLocaleDateString()}</span>
-                    <span>•</span>
-                    <span>👁️ {articleDetail.view_count} views</span>
-                  </div>
-                </div>
-
-                {/* Main Article Grid */}
-                <div className="cnet-detail-grid">
-                  {/* Left Column: Product Photos, Tabs, Review Content */}
-                  <div>
-                    {/* Product Photo Gallery */}
-                    {articleDetail.products[0]?.image_urls?.length > 0 && (
-                      <div className="cnet-gallery-box">
-                        <img 
-                          src={articleDetail.products[0].image_urls[0]} 
-                          alt="Product" 
-                          className="cnet-gallery-main-img"
-                        />
-                        <div className="cnet-gallery-sub-grid">
-                          <img 
-                            src={articleDetail.products[0].image_urls[1] || articleDetail.products[0].image_urls[0]} 
-                            alt="Angle 2" 
-                            className="cnet-gallery-sub-img"
-                          />
-                          <img 
-                            src={articleDetail.products[0].image_urls[2] || articleDetail.products[0].image_urls[0]} 
-                            alt="Angle 3" 
-                            className="cnet-gallery-sub-img"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* CNET Section Tabs */}
-                    <div className="cnet-tab-bar">
-                      <button 
-                        className={`cnet-tab-btn ${activeTab === 'guide' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('guide')}
-                      >
-                        Consensus Review
-                      </button>
-                      <button 
-                        className={`cnet-tab-btn ${activeTab === 'proscons' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('proscons')}
-                      >
-                        Pros & Cons
-                      </button>
-                      <button 
-                        className={`cnet-tab-btn ${activeTab === 'specs' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('specs')}
-                      >
-                        Specifications
-                      </button>
+                  <div style={{ background: '#1e293b', padding: '24px', borderRadius: '12px', marginBottom: '32px' }}>
+                    <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+                      {["guide", "proscons", "specs"].map(tab => (
+                        <button
+                          key={tab}
+                          style={{
+                            background: activeTab === tab ? '#6366f1' : 'transparent',
+                            color: '#fff',
+                            border: 'none',
+                            padding: '8px 16px',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontWeight: 'bold'
+                          }}
+                          onClick={() => setActiveTab(tab)}
+                        >
+                          {tab === 'guide' ? 'Full Guide' : tab === 'proscons' ? 'Pros & Cons' : 'Specifications'}
+                        </button>
+                      ))}
                     </div>
 
-                    {/* Tab Panels */}
                     {activeTab === 'guide' && (
                       <div 
-                        className="cnet-article-body"
-                        dangerouslySetInnerHTML={{ __html: articleDetail.full_article_html }}
+                        dangerouslySetInnerHTML={{ __html: articleDetail.full_article_html }} 
+                        style={{ color: '#e2e8f0', lineHeight: '1.8' }} 
                       />
                     )}
 
-                    {activeTab === 'proscons' && (
-                      <div className="cnet-pros-cons-card">
-                        <div className="cnet-pros-cons-header">
-                          <div>{articleDetail.products[0]?.name || "Product"} — PROS & CONS</div>
-                          <div style={{ fontSize: '13px', color: 'var(--cnet-lime)' }}>CONSENSUS VERDICT</div>
+                    {activeTab === 'proscons' && articleDetail.products?.[0] && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                        <div style={{ background: '#064e3b', padding: '16px', borderRadius: '8px' }}>
+                          <h4 style={{ color: '#34d399', marginBottom: '12px' }}>PROS</h4>
+                          <ul style={{ paddingLeft: '20px', color: '#ecfdf5' }}>
+                            {articleDetail.products[0].pros?.map((p, i) => (
+                              <li key={i}>{typeof p === 'string' ? p : p.text}</li>
+                            ))}
+                          </ul>
                         </div>
-
-                        <div className="cnet-pros-cons-grid">
-                          {/* PROS Column */}
-                          <div className="cnet-pros-column">
-                            <div className="cnet-pros-title">
-                              <span className="cnet-pro-icon">✓</span>
-                              THE GOOD (PROS)
-                            </div>
-                            {articleDetail.products[0]?.pros?.map((p, i) => (
-                              <div key={i} className="cnet-pro-con-item">
-                                <span className="cnet-pro-icon">✓</span>
-                                <div>{p.text}</div>
-                              </div>
+                        <div style={{ background: '#7f1d1d', padding: '16px', borderRadius: '8px' }}>
+                          <h4 style={{ color: '#f87171', marginBottom: '12px' }}>CONS</h4>
+                          <ul style={{ paddingLeft: '20px', color: '#fef2f2' }}>
+                            {articleDetail.products[0].cons?.map((c, i) => (
+                              <li key={i}>{typeof c === 'string' ? c : c.text}</li>
                             ))}
-                          </div>
-
-                          {/* CONS Column */}
-                          <div className="cnet-cons-column">
-                            <div className="cnet-cons-title">
-                              <span className="cnet-con-icon">✕</span>
-                              THE BAD (CONS)
-                            </div>
-                            {articleDetail.products[0]?.cons?.map((c, i) => (
-                              <div key={i} className="cnet-pro-con-item">
-                                <span className="cnet-con-icon">✕</span>
-                                <div>{c.text}</div>
-                              </div>
-                            ))}
-                          </div>
+                          </ul>
                         </div>
                       </div>
                     )}
 
-                    {activeTab === 'specs' && (
-                      <div className="cnet-specs-table-box">
-                        <table className="cnet-specs-table">
-                          <thead>
-                            <tr>
-                              <th>Feature Specification</th>
-                              <th>Details</th>
+                    {activeTab === 'specs' && articleDetail.products?.[0] && (
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <tbody>
+                          {Object.entries(articleDetail.products[0].specs || {}).map(([k, v]) => (
+                            <tr key={k} style={{ borderBottom: '1px solid #334155' }}>
+                              <td style={{ padding: '10px', color: '#94a3b8', width: '200px' }}>{k}</td>
+                              <td style={{ padding: '10px', color: '#fff' }}>{String(v)}</td>
                             </tr>
-                          </thead>
-                          <tbody>
-                            {articleDetail.products.map(product => 
-                              Object.entries(product.specs || {}).map(([key, val]) => (
-                                <tr key={key}>
-                                  <td className="cnet-spec-key">{key}</td>
-                                  <td className="cnet-spec-val">{String(val)}</td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
+                          ))}
+                        </tbody>
+                      </table>
                     )}
                   </div>
+                </div>
 
-                  {/* Right Column: Sticky Score & Buy Box */}
-                  <aside>
-                    <div className="cnet-sidebar-card">
-                      <div className="cnet-score-box">
-                        <div className="cnet-score-num">
-                          {articleDetail.products[0]?.rating || "4.5"}
-                        </div>
-                        <div className="cnet-score-label">PROVENPICK CONSENSUS SCORE</div>
-                      </div>
-
-                      <div style={{ marginBottom: '20px' }}>
-                        <div style={{ fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', color: '#777', marginBottom: '4px' }}>
-                          MSRP / STARTING PRICE
-                        </div>
-                        <div style={{ fontSize: '28px', fontWeight: '900', color: '#111' }}>
-                          ₹{articleDetail.products[0]?.price_inr || "39,999"}
-                        </div>
-                      </div>
-
-                      {articleDetail.products.map(product => 
-                        product.affiliate_links?.map(link => (
-                          <button 
-                            key={link.id} 
-                            className="cnet-buy-btn"
-                            onClick={() => handleAffiliateClick(link.id, link.tracked_url)}
-                          >
-                            CHECK PRICE ON {link.platform.toUpperCase()} 🛒
-                          </button>
-                        ))
-                      )}
-
-                      <div style={{ fontSize: '11px', color: '#888', textAlign: 'center', marginTop: '12px', lineHeight: '1.4' }}>
-                        When you buy through links on our site, we may earn an affiliate commission.
-                      </div>
+                {/* Right Product Card */}
+                {articleDetail.products?.[0] && (
+                  <div>
+                    <div style={{ background: '#1e293b', borderRadius: '12px', padding: '24px', position: 'sticky', top: '20px' }}>
+                      <img 
+                        src={articleDetail.products[0].image_url || "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600"} 
+                        alt={articleDetail.products[0].name} 
+                        style={{ width: '100%', borderRadius: '8px', height: '220px', objectFit: 'cover', marginBottom: '16px' }}
+                      />
+                      <h3 style={{ fontSize: '20px', color: '#fff' }}>{articleDetail.products[0].name}</h3>
+                      <p style={{ color: '#94a3b8', marginBottom: '16px' }}>{articleDetail.products[0].brand}</p>
+                      
+                      {articleDetail.products[0].affiliate_links?.map((link, idx) => (
+                        <button
+                          key={idx}
+                          style={{ width: '100%', background: '#a3e635', color: '#111827', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '10px' }}
+                          onClick={() => handleAffiliateClick(link.id, link.tracked_url)}
+                        >
+                          Check Price on {link.platform?.toUpperCase()} →
+                        </button>
+                      ))}
                     </div>
-                  </aside>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          /* Homepage / Category Grid View */
+          <>
+            {selectedL1 === "All" && currentBestItem && currentBestItem.article ? (
+              /* BEST Horizontal Page-by-Page Carousel Box */
+              <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '24px', marginBottom: '48px' }}>
+                {/* Left Yellow "BEST" Control Box */}
+                <div style={{ background: '#fef08a', color: '#111827', borderRadius: '16px', padding: '28px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontSize: '32px', fontWeight: '900', letterSpacing: '1px' }}>BEST</div>
+                    <p style={{ fontSize: '13px', color: '#4b5563', marginTop: '4px', marginBottom: '24px' }}>
+                      Top rated picks from each category
+                    </p>
+                    
+                    <div style={{ background: '#111827', color: '#fef08a', padding: '8px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', display: 'inline-block', marginBottom: '12px' }}>
+                      CATEGORY: {currentBestItem.category.toUpperCase()}
+                    </div>
+                    <h4 style={{ fontSize: '15px', color: '#111827', lineHeight: '1.4' }}>
+                      Best {currentBestItem.category} for 2026: Tested & Reviewed
+                    </h4>
+                  </div>
+
+                  {/* Carousel Page Controls */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '24px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563' }}>
+                      {bestIndex + 1} of {bestCarouselItems.length} Categories
+                    </span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button 
+                        onClick={handlePrevBest}
+                        style={{ background: '#111827', color: '#fff', border: 'none', width: '36px', height: '36px', borderRadius: '50%', cursor: 'pointer', fontSize: '16px' }}
+                      >
+                        ‹
+                      </button>
+                      <button 
+                        onClick={handleNextBest}
+                        style={{ background: '#111827', color: '#fff', border: 'none', width: '36px', height: '36px', borderRadius: '50%', cursor: 'pointer', fontSize: '16px' }}
+                      >
+                        ›
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Hero Feature Slide */}
+                <div 
+                  style={{ background: '#1e293b', borderRadius: '16px', overflow: 'hidden', display: 'grid', gridTemplateColumns: '1fr 1fr', cursor: 'pointer' }}
+                  onClick={() => handleSelectArticle(currentBestItem.article.slug)}
+                >
+                  <img 
+                    src={currentBestItem.article.products?.[0]?.image_url || "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800"} 
+                    alt={currentBestItem.article.title}
+                    style={{ width: '100%', height: '380px', objectFit: 'cover' }}
+                  />
+                  <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <span style={{ color: '#a3e635', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                      FEATURED PICK
+                    </span>
+                    <h2 style={{ fontSize: '26px', color: '#fff', marginTop: '8px', marginBottom: '16px', lineHeight: '1.3' }}>
+                      {currentBestItem.article.title}
+                    </h2>
+                    <p style={{ color: '#cbd5e1', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' }}>
+                      {currentBestItem.article.introduction || currentBestItem.article.summary}
+                    </p>
+                    <span style={{ color: '#a3e635', fontWeight: 'bold', fontSize: '14px' }}>Read Full Review →</span>
+                  </div>
                 </div>
               </div>
+            ) : null}
+
+            {/* Category Header Title when filtering */}
+            {selectedL1 !== "All" && (
+              <div style={{ marginBottom: '24px', borderBottom: '1px solid #1e293b', paddingBottom: '16px' }}>
+                <h2 style={{ fontSize: '28px', color: '#fff' }}>
+                  {selectedL1} {selectedL2 !== "All" ? `> ${selectedL2}` : ''} ({filteredArticles.length} Guides)
+                </h2>
+              </div>
             )}
+
+            {/* Latest Hands-On Buying Guides (Strictly filtered by Category) */}
+            <section style={{ marginTop: '32px' }}>
+              <h3 style={{ fontSize: '22px', color: '#fff', marginBottom: '20px', borderBottom: '2px solid #a3e635', paddingBottom: '8px', display: 'inline-block' }}>
+                {selectedL1 === "All" ? "LATEST HANDS-ON BUYING GUIDES" : `${selectedL1.toUpperCase()} REVIEWS`}
+              </h3>
+
+              {loading ? (
+                <div style={{ padding: '40px 0', textAlign: 'center', color: '#94a3b8' }}>Loading published reviews...</div>
+              ) : filteredArticles.length === 0 ? (
+                <div style={{ padding: '40px', background: '#1e293b', borderRadius: '12px', textAlign: 'center', color: '#94a3b8' }}>
+                  No published reviews found for {selectedL1} {selectedL2 !== "All" ? `> ${selectedL2}` : ''} yet. Approve drafts in Editor Dashboard to populate this section!
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '24px' }}>
+                  {filteredArticles.map((art) => (
+                    <div 
+                      key={art.id} 
+                      style={{ background: '#1e293b', borderRadius: '12px', overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.2s', border: '1px solid #334155' }}
+                      onClick={() => handleSelectArticle(art.slug)}
+                    >
+                      <img 
+                        src={art.products?.[0]?.image_url || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600"} 
+                        alt={art.title}
+                        style={{ width: '100%', height: '200px', objectFit: 'cover' }}
+                      />
+                      <div style={{ padding: '20px' }}>
+                        <span style={{ color: '#a3e635', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                          {art.category_name}
+                        </span>
+                        <h4 style={{ fontSize: '18px', color: '#fff', marginTop: '6px', marginBottom: '10px', lineHeight: '1.4' }}>
+                          {art.title}
+                        </h4>
+                        <p style={{ color: '#94a3b8', fontSize: '13px', lineHeight: '1.5', height: '40px', overflow: 'hidden' }}>
+                          {art.introduction || art.summary}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           </>
         )}
       </div>

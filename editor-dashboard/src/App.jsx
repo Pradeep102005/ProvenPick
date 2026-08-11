@@ -14,6 +14,12 @@ function App() {
   // Modals
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showQueueModal, setShowQueueModal] = useState(false);
+  
+  // Custom Queue Input
+  const [customUrl, setCustomUrl] = useState("");
+  const [queueLoading, setQueueLoading] = useState(false);
+  const [queueMsg, setQueueMsg] = useState(null);
   
   // Approve Inputs
   const [categoryId, setCategoryId] = useState(1);
@@ -22,7 +28,6 @@ function App() {
   // Reject Input
   const [rejectComments, setRejectComments] = useState("");
 
-  // Fetch reviews
   const fetchReviews = async () => {
     setLoading(true);
     try {
@@ -36,7 +41,6 @@ function App() {
       setReviews(data);
       setError(null);
       
-      // Keep selected review updated if it is currently open
       if (selectedReview) {
         const updated = data.find(r => r.product_uuid === selectedReview.product_uuid);
         if (updated) setSelectedReview(updated);
@@ -55,7 +59,6 @@ function App() {
   const selectReview = (review) => {
     setSelectedReview(review);
     setActiveTab("draft");
-    // Prepopulate approval form from selected review if present
     setCategoryId(review.l3_category_id || 1);
     setCategoryName(review.category_name || "Audio Gear");
   };
@@ -66,10 +69,11 @@ function App() {
       const res = await fetch(`${API_BASE}/${selectedReview.product_uuid}/approve`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({})
+        body: JSON.stringify({ category_name: categoryName, l3_category_id: Number(categoryId) })
       });
       if (!res.ok) throw new Error("Approval action failed on staging server.");
       
+      setShowApproveModal(false);
       await fetchReviews();
     } catch (err) {
       alert(err.message);
@@ -82,9 +86,7 @@ function App() {
       const res = await fetch(`${API_BASE}/${selectedReview.product_uuid}/reject`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          editor_comments: rejectComments
-        })
+        body: JSON.stringify({ editor_comments: rejectComments })
       });
       if (!res.ok) throw new Error("Rejection action failed on staging server.");
       
@@ -96,260 +98,239 @@ function App() {
     }
   };
 
+  const handleQueueCustomUrl = async (e) => {
+    e.preventDefault();
+    if (!customUrl.trim()) return;
+    setQueueLoading(true);
+    setQueueMsg(null);
+    try {
+      const res = await fetch(`${API_BASE}/enqueue-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: customUrl.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to queue YouTube URL.");
+      
+      setQueueMsg({ type: "success", text: data.message });
+      setCustomUrl("");
+      setTimeout(() => {
+        setShowQueueModal(false);
+        setQueueMsg(null);
+        fetchReviews();
+      }, 1500);
+    } catch (err) {
+      setQueueMsg({ type: "error", text: err.message });
+    } finally {
+      setQueueLoading(false);
+    }
+  };
+
   return (
-    <div className="app-container">
-      {/* Sidebar */}
+    <div className="dashboard-layout">
+      {/* Sidebar Navigation & Controls */}
       <aside className="sidebar">
-        <div className="sidebar-header">
-          <div className="logo-icon">PP</div>
-          <span className="logo-text">ProvenPick Staging</span>
-        </div>
-        
-        <div className="sidebar-filters">
+        <div className="brand flex-between">
+          <div className="flex-align gap-2">
+            <span className="brand-logo">PP</span>
+            <h1>ProvenPick Staging</h1>
+          </div>
           <button 
-            className={`filter-btn ${filterStatus === "all" ? "active" : ""}`}
-            onClick={() => setFilterStatus("all")}
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowQueueModal(true)}
+            style={{ fontSize: '12px', padding: '6px 10px', background: '#3b82f6', color: '#fff' }}
           >
-            All
-          </button>
-          <button 
-            className={`filter-btn ${filterStatus === "pending" ? "active" : ""}`}
-            onClick={() => setFilterStatus("pending")}
-          >
-            Pending
-          </button>
-          <button 
-            className={`filter-btn ${filterStatus === "published" ? "active" : ""}`}
-            onClick={() => setFilterStatus("published")}
-          >
-            Published
-          </button>
-          <button 
-            className={`filter-btn ${filterStatus === "rejected" ? "active" : ""}`}
-            onClick={() => setFilterStatus("rejected")}
-          >
-            Rejected
+            ➕ Queue URL
           </button>
         </div>
 
-        <div className="review-list">
-          {loading && <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>Loading review drafts...</div>}
-          {error && <div style={{ color: 'var(--danger)', padding: '10px 0' }}>Error: {error}</div>}
-          {!loading && reviews.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '40px 10px', color: 'var(--text-dim)' }}>
-              No reviews in this queue.
-            </div>
-          )}
-          
-          {reviews.map(review => (
-            <div 
-              key={review.id}
-              className={`review-card ${selectedReview?.product_uuid === review.product_uuid ? "selected" : ""}`}
-              onClick={() => selectReview(review)}
+        <div className="filter-group">
+          {["all", "pending", "published", "rejected"].map((status) => (
+            <button
+              key={status}
+              className={`filter-chip ${filterStatus === status ? 'active' : ''}`}
+              onClick={() => setFilterStatus(status)}
             >
-              <div className="review-card-header">
-                <span className="review-card-brand">{review.brand || "Consensus"}</span>
-                <span className={`status-badge ${review.status}`}>{review.status}</span>
+              {status.charAt(0).toUpperCase() + status.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        <div className="review-list">
+          {loading && <div className="p-4 text-muted">Loading staging queue...</div>}
+          {error && <div className="p-4 text-error">Error: {error}</div>}
+          
+          {!loading && reviews.length === 0 && (
+            <div className="p-4 text-muted">No reviews in this queue.</div>
+          )}
+
+          {reviews.map((r) => (
+            <div
+              key={r.product_uuid}
+              className={`review-card ${selectedReview?.product_uuid === r.product_uuid ? 'selected' : ''}`}
+              onClick={() => selectReview(r)}
+            >
+              <div className="flex-between mb-1">
+                <span className="brand-tag">{r.brand || "GENERIC"}</span>
+                <span className={`status-badge status-${r.status}`}>{r.status.toUpperCase()}</span>
               </div>
-              <h3 className="review-card-title">{review.review_title}</h3>
-              <div className="review-card-meta">
-                <span>{review.name}</span>
-                <span>{new Date(review.submitted_at).toLocaleDateString()}</span>
+              <h3 className="card-title">{r.review_title}</h3>
+              <div className="card-meta flex-between">
+                <span>{r.name}</span>
+                <span>{new Date(r.submitted_at).toLocaleDateString()}</span>
               </div>
             </div>
           ))}
         </div>
       </aside>
 
-      {/* Main Preview Panel */}
-      <main className="preview-panel">
+      {/* Main Review Workspace */}
+      <main className="workspace">
         {selectedReview ? (
           <>
-            {/* Header */}
-            <div className="detail-header">
-              <div className="detail-title-area">
-                <span className="detail-title-brand">{selectedReview.brand || "Consensus Guide"}</span>
-                <h1 className="detail-title">{selectedReview.name}</h1>
+            <header className="workspace-header">
+              <div>
+                <span className="text-secondary text-sm">{selectedReview.brand}</span>
+                <h2>{selectedReview.name}</h2>
               </div>
               
-              <div className="detail-actions">
+              <div className="flex-align gap-2">
+                <button className="btn btn-secondary">★ Pin to Homepage Flashcard</button>
+
                 {selectedReview.status === "pending" && (
                   <>
                     <button 
-                      className="action-btn approve"
-                      onClick={handleApprove}
+                      className="btn btn-danger"
+                      onClick={() => setShowRejectModal(true)}
+                    >
+                      ✕ Reject & Request AI Rewrite
+                    </button>
+                    
+                    <button 
+                      className="btn btn-success"
+                      onClick={() => setShowApproveModal(true)}
                     >
                       ✓ Approve & Publish Now
                     </button>
-                    <button 
-                      className="action-btn reject"
-                      onClick={() => setShowRejectModal(true)}
-                    >
-                      Reject Draft
-                    </button>
                   </>
                 )}
-                <button 
-                  className="action-btn"
-                  style={{ background: selectedReview.is_featured ? '#eab308' : '#3a3a46', color: selectedReview.is_featured ? '#000' : '#fff', marginLeft: '10px', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '700' }}
-                  onClick={async () => {
-                    try {
-                      const res = await fetch(`${API_BASE}/${selectedReview.product_uuid}/feature`, { method: "PATCH" });
-                      if (!res.ok) throw new Error("Failed to update feature status");
-                      await fetchReviews();
-                    } catch (err) {
-                      alert(err.message);
-                    }
-                  }}
-                >
-                  {selectedReview.is_featured ? '⭐ Featured on Homepage Flashcard' : '☆ Pin to Homepage Flashcard'}
-                </button>
+
                 {selectedReview.status === "published" && (
-                  <span className="status-badge published" style={{ padding: '10px 16px', borderRadius: '8px', marginLeft: '10px' }}>
-                    🚀 Published to Live Site
-                  </span>
-                )}
-                {selectedReview.status === "rejected" && (
-                  <span className="status-badge rejected" style={{ padding: '10px 16px', borderRadius: '8px' }}>
-                    🔄 Loop Active: Awaiting AI Rewrite
-                  </span>
+                  <span className="badge badge-success">🚀 PUBLISHED TO LIVE SITE</span>
                 )}
               </div>
-            </div>
+            </header>
 
-            {/* Tabs */}
-            <div className="detail-tabs">
+            <nav className="tab-bar">
               <button 
-                className={`tab-btn ${activeTab === "draft" ? "active" : ""}`}
-                onClick={() => setActiveTab("draft")}
+                className={`tab-btn ${activeTab === 'draft' ? 'active' : ''}`}
+                onClick={() => setActiveTab('draft')}
               >
                 Draft Review
               </button>
               <button 
-                className={`tab-btn ${activeTab === "proscons" ? "active" : ""}`}
-                onClick={() => setActiveTab("proscons")}
+                className={`tab-btn ${activeTab === 'proscons' ? 'active' : ''}`}
+                onClick={() => setActiveTab('proscons')}
               >
                 Pros & Cons
               </button>
               <button 
-                className={`tab-btn ${activeTab === "specs" ? "active" : ""}`}
-                onClick={() => setActiveTab("specs")}
+                className={`tab-btn ${activeTab === 'specs' ? 'active' : ''}`}
+                onClick={() => setActiveTab('specs')}
               >
                 Specifications
               </button>
               <button 
-                className={`tab-btn ${activeTab === "affiliate" ? "active" : ""}`}
-                onClick={() => setActiveTab("affiliate")}
+                className={`tab-btn ${activeTab === 'affiliate' ? 'active' : ''}`}
+                onClick={() => setActiveTab('affiliate')}
               >
                 Affiliate Links
               </button>
               <button 
-                className={`tab-btn ${activeTab === "sources" ? "active" : ""}`}
-                onClick={() => setActiveTab("sources")}
+                className={`tab-btn ${activeTab === 'sources' ? 'active' : ''}`}
+                onClick={() => setActiveTab('sources')}
               >
                 Sources
               </button>
-            </div>
+            </nav>
 
-            {/* Tab Contents */}
-            <div className="detail-content">
-              {activeTab === "draft" && (
-                <div style={{ maxWidth: '800px' }}>
-                  <div style={{ marginBottom: '24px', padding: '16px 20px', background: 'rgba(255,255,255,0.02)', borderRadius: '10px', borderLeft: '3px solid var(--accent-primary)' }}>
-                    <h4 style={{ fontSize: '12px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '4px' }}>AI Summary Verdict</h4>
-                    <p style={{ fontSize: '15px', lineHeight: '1.6' }}>{selectedReview.summary}</p>
+            <div className="content-area">
+              {activeTab === 'draft' && (
+                <div className="draft-view">
+                  <div className="verdict-card">
+                    <span className="verdict-title">AI SUMMARY VERDICT</span>
+                    <p>{selectedReview.summary}</p>
                   </div>
+                  <h3>{selectedReview.review_title}</h3>
+                  <p><strong>Verdict:</strong> {selectedReview.verdict}</p>
                   
-                  {selectedReview.editor_comments && (
-                    <div style={{ marginBottom: '24px', padding: '16px 20px', background: 'rgba(248,113,113,0.05)', borderRadius: '10px', borderLeft: '3px solid var(--danger)' }}>
-                      <h4 style={{ fontSize: '12px', textTransform: 'uppercase', color: 'var(--danger)', marginBottom: '4px' }}>Latest Editor Critique Comments</h4>
-                      <p style={{ fontSize: '14px', fontStyle: 'italic' }}>"{selectedReview.editor_comments}"</p>
+                  {selectedReview.review_sections.map((sec, idx) => (
+                    <div key={idx} className="mb-4" style={{ marginTop: '20px' }}>
+                      <h4 style={{ fontSize: '18px', color: '#60a5fa' }}>{sec.title}</h4>
+                      <div dangerouslySetInnerHTML={{ __html: sec.content_html }} style={{ lineHeight: '1.7', color: '#d1d5db' }} />
                     </div>
-                  )}
+                  ))}
+                </div>
+              )}
 
-                  <div className="html-preview">
-                    {selectedReview.review_sections?.map(section => (
-                      <div key={section.page_index} style={{ marginBottom: '32px' }}>
-                        <h2>{section.title}</h2>
-                        <div dangerouslySetInnerHTML={{ __html: section.content_html }} />
-                      </div>
+              {activeTab === 'proscons' && (
+                <div className="pros-cons-grid">
+                  <div className="pros-box">
+                    <h3>Pros</h3>
+                    <ul>
+                      {selectedReview.pros.map((p, idx) => (
+                        <li key={idx}>+ {typeof p === 'string' ? p : p.text}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="cons-box">
+                    <h3>Cons</h3>
+                    <ul>
+                      {selectedReview.cons.map((c, idx) => (
+                        <li key={idx}>- {typeof c === 'string' ? c : c.text}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'specs' && (
+                <table className="specs-table">
+                  <tbody>
+                    {Object.entries(selectedReview.specs || {}).map(([k, v]) => (
+                      <tr key={k}>
+                        <td className="spec-key">{k}</td>
+                        <td className="spec-val">{String(v)}</td>
+                      </tr>
                     ))}
-                  </div>
-                </div>
+                  </tbody>
+                </table>
               )}
 
-              {activeTab === "proscons" && (
-                <div className="pros-cons-container">
-                  <div className="pro-con-box">
-                    <h2 className="pro-con-header pros">
-                      <span>🟢</span> Pros
-                    </h2>
-                    <div className="pro-con-list">
-                      {selectedReview.pros?.map((pro, index) => (
-                        <div key={index} className="pro-con-item pro">
-                          <span className="pro-con-text">{pro.text}</span>
-                          <span className="pro-con-weight">Weight: {pro.weight || 5}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="pro-con-box">
-                    <h2 className="pro-con-header cons">
-                      <span>🔴</span> Cons
-                    </h2>
-                    <div className="pro-con-list">
-                      {selectedReview.cons?.map((con, index) => (
-                        <div key={index} className="pro-con-item con">
-                          <span className="pro-con-text">{con.text}</span>
-                          <span className="pro-con-weight">Weight: {con.weight || 3}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === "specs" && (
-                <div className="specs-grid">
-                  {Object.entries(selectedReview.specs || {}).map(([key, val]) => (
-                    <div key={key} className="spec-item">
-                      <div className="spec-key">{key}</div>
-                      <div className="spec-val">{String(val)}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {activeTab === "affiliate" && (
-                <div className="specs-grid">
-                  {Object.entries(selectedReview.affiliate_links || {}).map(([platform, url]) => (
-                    <div key={platform} className="spec-item">
-                      <div className="spec-key" style={{ color: 'var(--success)' }}>{platform}</div>
-                      <a href={url} target="_blank" rel="noopener noreferrer" className="spec-val" style={{ color: 'var(--accent-primary)', textDecoration: 'underline', wordBreak: 'break-all' }}>
-                        {url}
-                      </a>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {activeTab === "sources" && (
-                <div className="sources-list">
-                  {selectedReview.sources?.map((src, index) => (
-                    <a 
-                      key={index} 
-                      href={src.video_url} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="source-item"
-                    >
-                      <div className="source-info">
-                        <h4 className="source-title">{src.video_title}</h4>
-                        <span className="source-channel">{src.channel_name}</span>
+              {activeTab === 'affiliate' && (
+                <div className="affiliate-list">
+                  {selectedReview.affiliate_links.map((link, idx) => (
+                    <div key={idx} className="affiliate-card flex-between">
+                      <div>
+                        <strong>{link.platform?.toUpperCase()}</strong>
+                        <div className="text-secondary text-sm">{link.tracked_url}</div>
                       </div>
-                      <span className="source-link-icon">🔗</span>
-                    </a>
+                      <a href={link.tracked_url} target="_blank" rel="noreferrer" className="btn btn-secondary">Test Link</a>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {activeTab === 'sources' && (
+                <div className="sources-list">
+                  {selectedReview.sources.map((src, idx) => (
+                    <div key={idx} className="source-card flex-between">
+                      <div>
+                        <strong>{src.video_title}</strong>
+                        <div className="text-secondary text-sm">{src.channel_name}</div>
+                      </div>
+                      <a href={src.video_url} target="_blank" rel="noreferrer" className="btn btn-secondary">🔗</a>
+                    </div>
                   ))}
                 </div>
               )}
@@ -357,39 +338,94 @@ function App() {
           </>
         ) : (
           <div className="empty-state">
-            <div className="empty-state-icon">✍️</div>
+            <div className="empty-icon">✍️</div>
             <h2>Select a review from staging list</h2>
             <p>You can verify specifications, read draft guides, and publish directly to live site</p>
           </div>
         )}
       </main>
 
-      {/* Reject Modal */}
-      {showRejectModal && (
-        <div className="modal-overlay">
+      {/* Queue Custom YouTube URL Modal */}
+      {showQueueModal && (
+        <div className="modal-backdrop">
           <div className="modal-content">
-            <h2 className="modal-title">Reject Review Draft</h2>
-            <p className="modal-desc">
-              Specify what the Scribe Agent needs to adjust (e.g. wrong facts, bad formatting). This triggers the LangGraph agent to rewrite the review.
+            <h3>➕ Queue Custom YouTube Video</h3>
+            <p className="text-secondary text-sm mb-3">
+              Paste a YouTube review link to immediately queue it into the AI pipeline.
             </p>
-            
-            <div className="modal-form-group">
-              <label>critique comments</label>
-              <textarea 
-                className="modal-input modal-textarea"
-                placeholder="Detail the corrections here..."
-                value={rejectComments}
-                onChange={(e) => setRejectComments(e.target.value)}
+            <form onSubmit={handleQueueCustomUrl}>
+              <div className="form-group mb-3">
+                <label>YouTube Video URL:</label>
+                <input
+                  type="url"
+                  className="form-input"
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  value={customUrl}
+                  onChange={(e) => setCustomUrl(e.target.value)}
+                  required
+                />
+              </div>
+
+              {queueMsg && (
+                <div className={`p-2 mb-3 ${queueMsg.type === 'error' ? 'text-error' : 'text-success'}`} style={{ fontSize: '13px' }}>
+                  {queueMsg.text}
+                </div>
+              )}
+
+              <div className="modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowQueueModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-success" disabled={queueLoading}>
+                  {queueLoading ? "Queuing..." : "Queue to AI Pipeline"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Approve Modal */}
+      {showApproveModal && (
+        <div className="modal-backdrop">
+          <div className="modal-content">
+            <h3>Approve & Publish Review</h3>
+            <p className="text-secondary text-sm mb-3">
+              Select the final taxonomy category before pushing live to website.
+            </p>
+            <div className="form-group mb-3">
+              <label>Category Name:</label>
+              <input
+                type="text"
+                className="form-input"
+                value={categoryName}
+                onChange={(e) => setCategoryName(e.target.value)}
               />
             </div>
-
             <div className="modal-actions">
-              <button className="modal-btn cancel" onClick={() => setShowRejectModal(false)}>
-                Cancel
-              </button>
-              <button className="modal-btn" style={{ background: 'var(--danger)', color: '#fff' }} onClick={handleReject}>
-                Submit to Rewrite
-              </button>
+              <button className="btn btn-secondary" onClick={() => setShowApproveModal(false)}>Cancel</button>
+              <button className="btn btn-success" onClick={handleApprove}>Confirm & Publish Live</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Modal */}
+      {showRejectModal && (
+        <div className="modal-backdrop">
+          <div className="modal-content">
+            <h3>Reject Review & Request Rewrite</h3>
+            <p className="text-secondary text-sm mb-3">
+              Provide feedback for the AI Scribe Agent to rewrite the draft.
+            </p>
+            <textarea
+              className="form-input mb-3"
+              rows={4}
+              placeholder="e.g. Include detailed display brightness comparisons..."
+              value={rejectComments}
+              onChange={(e) => setRejectComments(e.target.value)}
+            />
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setShowRejectModal(false)}>Cancel</button>
+              <button className="btn btn-danger" onClick={handleReject}>Reject & Rewrite</button>
             </div>
           </div>
         </div>
