@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
+import './index.css';
 
 const API_BASE = "/staging-api/reviews";
 
 function App() {
   const [reviews, setReviews] = useState([]);
   const [selectedReview, setSelectedReview] = useState(null);
-  const [activeTab, setActiveTab] = useState("draft"); // draft | specs | proscons | affiliate | sources
+  const [activeTab, setActiveTab] = useState("draft"); // draft | proscons | specs | affiliate | sources
   const [filterStatus, setFilterStatus] = useState("all"); // all | pending | approved | rejected | published
   
   const [loading, setLoading] = useState(true);
@@ -16,14 +17,17 @@ function App() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showQueueModal, setShowQueueModal] = useState(false);
   
+  // Toast Popup Notification
+  const [toast, setToast] = useState(null); // { message: string, url: string }
+  
   // Custom Queue Input
   const [customUrl, setCustomUrl] = useState("");
   const [queueLoading, setQueueLoading] = useState(false);
   const [queueMsg, setQueueMsg] = useState(null);
   
   // Approve Inputs
-  const [categoryId, setCategoryId] = useState(1);
-  const [categoryName, setCategoryName] = useState("Audio Gear");
+  const [categoryName, setCategoryName] = useState("Smartphones");
+  const [l3CategoryId, setL3CategoryId] = useState(1);
   
   // Reject Input
   const [rejectComments, setRejectComments] = useState("");
@@ -44,6 +48,8 @@ function App() {
       if (selectedReview) {
         const updated = data.find(r => r.product_uuid === selectedReview.product_uuid);
         if (updated) setSelectedReview(updated);
+      } else if (data.length > 0) {
+        setSelectedReview(data[0]);
       }
     } catch (err) {
       setError(err.message);
@@ -59,8 +65,15 @@ function App() {
   const selectReview = (review) => {
     setSelectedReview(review);
     setActiveTab("draft");
-    setCategoryId(review.l3_category_id || 1);
-    setCategoryName(review.category_name || "Audio Gear");
+    setCategoryName(review.category_name || "Smartphones");
+    setL3CategoryId(review.l3_category_id || 1);
+  };
+
+  const triggerToast = (message, url = null) => {
+    setToast({ message, url });
+    setTimeout(() => {
+      setToast(null);
+    }, 6000);
   };
 
   const handleApprove = async () => {
@@ -69,11 +82,16 @@ function App() {
       const res = await fetch(`${API_BASE}/${selectedReview.product_uuid}/approve`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category_name: categoryName, l3_category_id: Number(categoryId) })
+        body: JSON.stringify({ category_name: categoryName, l3_category_id: Number(l3CategoryId) })
       });
       if (!res.ok) throw new Error("Approval action failed on staging server.");
       
       setShowApproveModal(false);
+      const approvedTitle = selectedReview.name || selectedReview.review_title;
+      triggerToast(
+        `🚀 "${approvedTitle}" review was successfully approved and published live to provenpick.xyz!`,
+        "https://provenpick.xyz"
+      );
       await fetchReviews();
     } catch (err) {
       alert(err.message);
@@ -92,6 +110,7 @@ function App() {
       
       setShowRejectModal(false);
       setRejectComments("");
+      triggerToast(`🔄 Review returned to Scribe AI pipeline for rewrite with comments.`);
       await fetchReviews();
     } catch (err) {
       alert(err.message);
@@ -114,11 +133,12 @@ function App() {
       
       setQueueMsg({ type: "success", text: data.message });
       setCustomUrl("");
+      triggerToast(`📥 YouTube video queued into AI review writer pipeline!`);
       setTimeout(() => {
         setShowQueueModal(false);
         setQueueMsg(null);
         fetchReviews();
-      }, 1500);
+      }, 1200);
     } catch (err) {
       setQueueMsg({ type: "error", text: err.message });
     } finally {
@@ -127,41 +147,87 @@ function App() {
   };
 
   return (
-    <div className="dashboard-layout">
-      {/* Sidebar Navigation & Controls */}
-      <aside className="sidebar">
-        <div className="brand flex-between">
-          <div className="flex-align gap-2">
-            <span className="brand-logo">PP</span>
-            <h1>ProvenPick Staging</h1>
+    <div className="app-container">
+      {/* Sliding Toast Popup Notification */}
+      {toast && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: '24px',
+            right: '24px',
+            zIndex: 9999,
+            background: '#10b981',
+            color: '#042f2e',
+            padding: '16px 24px',
+            borderRadius: '12px',
+            boxShadow: '0 10px 30px rgba(16, 185, 129, 0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px',
+            fontWeight: '600',
+            animation: 'slideIn 0.3s ease-out',
+            maxWidth: '500px'
+          }}
+        >
+          <span style={{ fontSize: '20px' }}>⚡</span>
+          <div>
+            <div style={{ fontSize: '14px', lineHeight: '1.4' }}>{toast.message}</div>
+            {toast.url && (
+              <a 
+                href={toast.url} 
+                target="_blank" 
+                rel="noreferrer"
+                style={{ color: '#042f2e', textDecoration: 'underline', fontWeight: 'bold', fontSize: '13px', marginTop: '4px', display: 'inline-block' }}
+              >
+                View Live on Website →
+              </a>
+            )}
           </div>
           <button 
-            className="btn btn-secondary btn-sm"
+            onClick={() => setToast(null)}
+            style={{ background: 'transparent', border: 'none', color: '#042f2e', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold' }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Sidebar Navigation */}
+      <aside className="sidebar">
+        <div className="sidebar-header" style={{ justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div className="logo-icon">PP</div>
+            <div className="logo-text">ProvenPick Staging</div>
+          </div>
+          <button 
+            className="filter-btn"
             onClick={() => setShowQueueModal(true)}
-            style={{ fontSize: '12px', padding: '6px 10px', background: '#3b82f6', color: '#fff' }}
+            style={{ background: '#6366f1', color: '#fff', fontWeight: 'bold', padding: '6px 12px' }}
           >
             ➕ Queue URL
           </button>
         </div>
 
-        <div className="filter-group">
+        <div className="sidebar-filters">
           {["all", "pending", "published", "rejected"].map((status) => (
             <button
               key={status}
-              className={`filter-chip ${filterStatus === status ? 'active' : ''}`}
+              className={`filter-btn ${filterStatus === status ? 'active' : ''}`}
               onClick={() => setFilterStatus(status)}
             >
-              {status.charAt(0).toUpperCase() + status.slice(1)}
+              {status.toUpperCase()}
             </button>
           ))}
         </div>
 
         <div className="review-list">
-          {loading && <div className="p-4 text-muted">Loading staging queue...</div>}
-          {error && <div className="p-4 text-error">Error: {error}</div>}
+          {loading && <div style={{ padding: '24px', color: 'var(--text-muted)' }}>Loading review queue...</div>}
+          {error && <div style={{ padding: '24px', color: 'var(--danger)' }}>Error: {error}</div>}
           
           {!loading && reviews.length === 0 && (
-            <div className="p-4 text-muted">No reviews in this queue.</div>
+            <div style={{ padding: '24px', color: 'var(--text-muted)', textAlign: 'center' }}>
+              No reviews found in queue.
+            </div>
           )}
 
           {reviews.map((r) => (
@@ -170,12 +236,12 @@ function App() {
               className={`review-card ${selectedReview?.product_uuid === r.product_uuid ? 'selected' : ''}`}
               onClick={() => selectReview(r)}
             >
-              <div className="flex-between mb-1">
-                <span className="brand-tag">{r.brand || "GENERIC"}</span>
-                <span className={`status-badge status-${r.status}`}>{r.status.toUpperCase()}</span>
+              <div className="review-card-header">
+                <span className="review-card-brand">{r.brand || "GENERIC"}</span>
+                <span className={`status-badge ${r.status}`}>{r.status.toUpperCase()}</span>
               </div>
-              <h3 className="card-title">{r.review_title}</h3>
-              <div className="card-meta flex-between">
+              <div className="review-card-title">{r.review_title}</div>
+              <div className="review-card-meta">
                 <span>{r.name}</span>
                 <span>{new Date(r.submitted_at).toLocaleDateString()}</span>
               </div>
@@ -184,30 +250,32 @@ function App() {
         </div>
       </aside>
 
-      {/* Main Review Workspace */}
-      <main className="workspace">
+      {/* Main Preview Panel */}
+      <main className="preview-panel">
         {selectedReview ? (
           <>
-            <header className="workspace-header">
-              <div>
-                <span className="text-secondary text-sm">{selectedReview.brand}</span>
-                <h2>{selectedReview.name}</h2>
+            <div className="detail-header">
+              <div className="detail-title-area">
+                <span className="detail-title-brand">{selectedReview.brand}</span>
+                <h2 className="detail-title">{selectedReview.name}</h2>
               </div>
               
-              <div className="flex-align gap-2">
-                <button className="btn btn-secondary">★ Pin to Homepage Flashcard</button>
+              <div className="detail-actions">
+                <button className="action-btn" style={{ background: 'rgba(255,255,255,0.08)', color: '#fff' }}>
+                  ★ Pin Flashcard
+                </button>
 
                 {selectedReview.status === "pending" && (
                   <>
                     <button 
-                      className="btn btn-danger"
+                      className="action-btn reject"
                       onClick={() => setShowRejectModal(true)}
                     >
-                      ✕ Reject & Request AI Rewrite
+                      ✕ Reject & Request Rewrite
                     </button>
                     
                     <button 
-                      className="btn btn-success"
+                      className="action-btn approve"
                       onClick={() => setShowApproveModal(true)}
                     >
                       ✓ Approve & Publish Now
@@ -216,12 +284,14 @@ function App() {
                 )}
 
                 {selectedReview.status === "published" && (
-                  <span className="badge badge-success">🚀 PUBLISHED TO LIVE SITE</span>
+                  <span className="status-badge published" style={{ fontSize: '13px', padding: '8px 16px' }}>
+                    🚀 PUBLISHED LIVE
+                  </span>
                 )}
               </div>
-            </header>
+            </div>
 
-            <nav className="tab-bar">
+            <div className="detail-tabs">
               <button 
                 className={`tab-btn ${activeTab === 'draft' ? 'active' : ''}`}
                 onClick={() => setActiveTab('draft')}
@@ -252,70 +322,75 @@ function App() {
               >
                 Sources
               </button>
-            </nav>
+            </div>
 
-            <div className="content-area">
+            <div className="detail-content">
               {activeTab === 'draft' && (
-                <div className="draft-view">
-                  <div className="verdict-card">
-                    <span className="verdict-title">AI SUMMARY VERDICT</span>
-                    <p>{selectedReview.summary}</p>
+                <div>
+                  <div style={{ background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: '12px', padding: '20px', marginBottom: '24px' }}>
+                    <div style={{ color: '#818cf8', fontWeight: 'bold', fontSize: '12px', letterSpacing: '1px', marginBottom: '6px' }}>AI SUMMARY VERDICT</div>
+                    <p style={{ color: '#e0e7ff', lineHeight: '1.6' }}>{selectedReview.summary}</p>
                   </div>
-                  <h3>{selectedReview.review_title}</h3>
-                  <p><strong>Verdict:</strong> {selectedReview.verdict}</p>
+
+                  <h3 style={{ fontSize: '22px', marginBottom: '12px' }}>{selectedReview.review_title}</h3>
+                  <p style={{ marginBottom: '24px', color: '#9ca3af' }}><strong>Verdict:</strong> {selectedReview.verdict}</p>
                   
-                  {selectedReview.review_sections.map((sec, idx) => (
-                    <div key={idx} className="mb-4" style={{ marginTop: '20px' }}>
-                      <h4 style={{ fontSize: '18px', color: '#60a5fa' }}>{sec.title}</h4>
-                      <div dangerouslySetInnerHTML={{ __html: sec.content_html }} style={{ lineHeight: '1.7', color: '#d1d5db' }} />
-                    </div>
-                  ))}
+                  <div className="html-preview">
+                    {selectedReview.review_sections.map((sec, idx) => (
+                      <div key={idx} style={{ marginBottom: '28px' }}>
+                        <h3 style={{ color: '#818cf8', marginBottom: '12px' }}>{sec.title}</h3>
+                        <div dangerouslySetInnerHTML={{ __html: sec.content_html }} />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
               {activeTab === 'proscons' && (
-                <div className="pros-cons-grid">
-                  <div className="pros-box">
-                    <h3>Pros</h3>
-                    <ul>
+                <div className="pros-cons-container">
+                  <div className="pro-con-box">
+                    <div className="pro-con-header pros">PROS</div>
+                    <div className="pro-con-list">
                       {selectedReview.pros.map((p, idx) => (
-                        <li key={idx}>+ {typeof p === 'string' ? p : p.text}</li>
+                        <div key={idx} className="pro-con-item pro">
+                          <span className="pro-con-text">+ {typeof p === 'string' ? p : p.text}</span>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </div>
-                  <div className="cons-box">
-                    <h3>Cons</h3>
-                    <ul>
+                  <div className="pro-con-box">
+                    <div className="pro-con-header cons">CONS</div>
+                    <div className="pro-con-list">
                       {selectedReview.cons.map((c, idx) => (
-                        <li key={idx}>- {typeof c === 'string' ? c : c.text}</li>
+                        <div key={idx} className="pro-con-item con">
+                          <span className="pro-con-text">- {typeof c === 'string' ? c : c.text}</span>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 </div>
               )}
 
               {activeTab === 'specs' && (
-                <table className="specs-table">
-                  <tbody>
-                    {Object.entries(selectedReview.specs || {}).map(([k, v]) => (
-                      <tr key={k}>
-                        <td className="spec-key">{k}</td>
-                        <td className="spec-val">{String(v)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="specs-grid">
+                  {Object.entries(selectedReview.specs || {}).map(([k, v]) => (
+                    <div key={k} className="spec-item">
+                      <div className="spec-key">{k}</div>
+                      <div className="spec-val">{String(v)}</div>
+                    </div>
+                  ))}
+                </div>
               )}
 
               {activeTab === 'affiliate' && (
-                <div className="affiliate-list">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   {selectedReview.affiliate_links.map((link, idx) => (
-                    <div key={idx} className="affiliate-card flex-between">
+                    <div key={idx} className="source-item">
                       <div>
-                        <strong>{link.platform?.toUpperCase()}</strong>
-                        <div className="text-secondary text-sm">{link.tracked_url}</div>
+                        <div className="source-title">{link.platform?.toUpperCase()}</div>
+                        <div className="source-channel">{link.tracked_url}</div>
                       </div>
-                      <a href={link.tracked_url} target="_blank" rel="noreferrer" className="btn btn-secondary">Test Link</a>
+                      <a href={link.tracked_url} target="_blank" rel="noreferrer" className="modal-btn cancel">Test Link</a>
                     </div>
                   ))}
                 </div>
@@ -324,13 +399,13 @@ function App() {
               {activeTab === 'sources' && (
                 <div className="sources-list">
                   {selectedReview.sources.map((src, idx) => (
-                    <div key={idx} className="source-card flex-between">
-                      <div>
-                        <strong>{src.video_title}</strong>
-                        <div className="text-secondary text-sm">{src.channel_name}</div>
+                    <a key={idx} href={src.video_url} target="_blank" rel="noreferrer" className="source-item">
+                      <div className="source-info">
+                        <div className="source-title">{src.video_title}</div>
+                        <div className="source-channel">{src.channel_name}</div>
                       </div>
-                      <a href={src.video_url} target="_blank" rel="noreferrer" className="btn btn-secondary">🔗</a>
-                    </div>
+                      <span className="source-link-icon">🔗</span>
+                    </a>
                   ))}
                 </div>
               )}
@@ -338,7 +413,7 @@ function App() {
           </>
         ) : (
           <div className="empty-state">
-            <div className="empty-icon">✍️</div>
+            <div className="empty-state-icon">✍️</div>
             <h2>Select a review from staging list</h2>
             <p>You can verify specifications, read draft guides, and publish directly to live site</p>
           </div>
@@ -347,18 +422,18 @@ function App() {
 
       {/* Queue Custom YouTube URL Modal */}
       {showQueueModal && (
-        <div className="modal-backdrop">
+        <div className="modal-overlay">
           <div className="modal-content">
-            <h3>➕ Queue Custom YouTube Video</h3>
-            <p className="text-secondary text-sm mb-3">
+            <div className="modal-title">➕ Queue Custom YouTube Video</div>
+            <div className="modal-desc">
               Paste a YouTube review link to immediately queue it into the AI pipeline.
-            </p>
+            </div>
             <form onSubmit={handleQueueCustomUrl}>
-              <div className="form-group mb-3">
+              <div className="modal-form-group">
                 <label>YouTube Video URL:</label>
                 <input
                   type="url"
-                  className="form-input"
+                  className="modal-input"
                   placeholder="https://www.youtube.com/watch?v=..."
                   value={customUrl}
                   onChange={(e) => setCustomUrl(e.target.value)}
@@ -367,14 +442,14 @@ function App() {
               </div>
 
               {queueMsg && (
-                <div className={`p-2 mb-3 ${queueMsg.type === 'error' ? 'text-error' : 'text-success'}`} style={{ fontSize: '13px' }}>
+                <div style={{ color: queueMsg.type === 'error' ? 'var(--danger)' : 'var(--success)', marginBottom: '16px', fontSize: '13px' }}>
                   {queueMsg.text}
                 </div>
               )}
 
               <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowQueueModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-success" disabled={queueLoading}>
+                <button type="button" className="modal-btn cancel" onClick={() => setShowQueueModal(false)}>Cancel</button>
+                <button type="submit" className="action-btn approve" disabled={queueLoading}>
                   {queueLoading ? "Queuing..." : "Queue to AI Pipeline"}
                 </button>
               </div>
@@ -385,24 +460,24 @@ function App() {
 
       {/* Approve Modal */}
       {showApproveModal && (
-        <div className="modal-backdrop">
+        <div className="modal-overlay">
           <div className="modal-content">
-            <h3>Approve & Publish Review</h3>
-            <p className="text-secondary text-sm mb-3">
+            <div className="modal-title">Approve & Publish Review</div>
+            <div className="modal-desc">
               Select the final taxonomy category before pushing live to website.
-            </p>
-            <div className="form-group mb-3">
+            </div>
+            <div className="modal-form-group">
               <label>Category Name:</label>
               <input
                 type="text"
-                className="form-input"
+                className="modal-input"
                 value={categoryName}
                 onChange={(e) => setCategoryName(e.target.value)}
               />
             </div>
             <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => setShowApproveModal(false)}>Cancel</button>
-              <button className="btn btn-success" onClick={handleApprove}>Confirm & Publish Live</button>
+              <button className="modal-btn cancel" onClick={() => setShowApproveModal(false)}>Cancel</button>
+              <button className="action-btn approve" onClick={handleApprove}>Confirm & Publish Live</button>
             </div>
           </div>
         </div>
@@ -410,22 +485,21 @@ function App() {
 
       {/* Reject Modal */}
       {showRejectModal && (
-        <div className="modal-backdrop">
+        <div className="modal-overlay">
           <div className="modal-content">
-            <h3>Reject Review & Request Rewrite</h3>
-            <p className="text-secondary text-sm mb-3">
+            <div className="modal-title">Reject Review & Request Rewrite</div>
+            <div className="modal-desc">
               Provide feedback for the AI Scribe Agent to rewrite the draft.
-            </p>
+            </div>
             <textarea
-              className="form-input mb-3"
-              rows={4}
+              className="modal-input modal-textarea"
               placeholder="e.g. Include detailed display brightness comparisons..."
               value={rejectComments}
               onChange={(e) => setRejectComments(e.target.value)}
             />
             <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => setShowRejectModal(false)}>Cancel</button>
-              <button className="btn btn-danger" onClick={handleReject}>Reject & Rewrite</button>
+              <button className="modal-btn cancel" onClick={() => setShowRejectModal(false)}>Cancel</button>
+              <button className="action-btn reject" onClick={handleReject}>Reject & Rewrite</button>
             </div>
           </div>
         </div>
