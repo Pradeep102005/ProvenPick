@@ -13,13 +13,9 @@ from src.services.redis_client import redis_client
 
 logger = structlog.get_logger()
 
-# Configure environment variables
 PIPELINE_QUEUE = os.environ.get("PIPELINE_QUEUE", "provenpick:pipeline_queue")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Video Classifier Prompt
-# ─────────────────────────────────────────────────────────────────────────────
 CLASSIFICATION_PROMPT = """
 You are an expert tech journalist and product reviewer. Your task is to analyze a YouTube video title and classify whether the video is a genuine, hands-on, objective product review (or a comparison review between products), or if it is another category (vlogs, gaming, news, skits, tutorials, or raw unboxing with no testing).
 
@@ -35,7 +31,7 @@ Response:
 
 async def classify_video(video_title: str) -> tuple[bool, str]:
     """
-    Uses Gemini 1.5 Flash to classify if a video is a product review based on title.
+    Uses Gemini 2.5 Flash to classify if a video is a product review based on title.
     """
     try:
         prompt = ChatPromptTemplate.from_template(CLASSIFICATION_PROMPT)
@@ -58,22 +54,16 @@ async def classify_video(video_title: str) -> tuple[bool, str]:
             
     except Exception as e:
         logger.error("Failed to classify video via LLM", title=video_title, error=str(e))
-        # Fallback: Default to True to prevent missing potential reviews, let human filter later
         return True, ""
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Scout Scan Workflow
-# ─────────────────────────────────────────────────────────────────────────────
 
 async def run_channel_scan():
     """
     Scrapes RSS feeds for all monitored channels, identifies new reviews,
-    records entries in the database, and queues jobs to Redis for LangGraph processing.
+    and queues any video that does not yet have a finished review in Staging.
     """
     logger.info("Scout Agent: Starting channel scan...")
     
     async with AsyncSessionFactory() as session:
-        # Fetch active channels
         stmt = select(Channel).where(Channel.is_active == True)
         res = await session.execute(stmt)
         channels = res.scalars().all()
@@ -87,31 +77,43 @@ async def run_channel_scan():
             videos = await get_latest_videos(channel.channel_id)
             
             for video in videos:
-                # Check if video was already parsed
-                check_stmt = select(ProcessedVideo).where(ProcessedVideo.video_id == video["video_id"])
-                check_res = await session.execute(check_stmt)
-                existing = check_res.scalars().first()
-                
-                if existing:
-                    continue  # Already processed in previous scan
-                
-                # Run classification
-                is_review, skip_reason = await classify_video(video["video_title"])
-                
-                # Record in processed_videos to prevent future parsing
-                pv = ProcessedVideo(
-                    video_id=video["video_id"],
-                    channel_id=video["channel_id"],
-                    video_title=video["video_title"],
-                    video_url=video["video_url"],
-                    is_review=is_review,
-                    skip_reason=skip_reason if not is_review else None
+                # Check if a completed job already exists for this video
+                job_check = select(PipelineJob).where(
+                    PipelineJob.video_id == video["video_id"],
+                    PipelineJob.status.in_(["approved", "published", "staging", "completed"])
                 )
-                session.add(pv)
-                await session.flush()
+                job_res = await session.execute(job_check)
+                already_done = job_res.scalars().first()
                 
+                if already_done:
+                    continue  # Skip videos that already have an approved or published review
+                
+                # Check processed_videos table for non-review skip classification
+                pv_check = select(ProcessedVideo).where(ProcessedVideo.video_id == video["video_id"])
+                pv_res = await session.execute(pv_check)
+                pv_existing = pv_res.scalars().first()
+                
+                if pv_existing and not pv_existing.is_review:
+                    continue  # Skip if classified as non-review
+                
+                # Classify video if not yet recorded
+                if not pv_existing:
+                    is_review, skip_reason = await classify_video(video["video_title"])
+                    pv = ProcessedVideo(
+                        video_id=video["video_id"],
+                        channel_id=video["channel_id"],
+                        video_title=video["video_title"],
+                        video_url=video["video_url"],
+                        is_review=is_review,
+                        skip_reason=skip_reason if not is_review else None
+                    )
+                    session.add(pv)
+                    await session.flush()
+                else:
+                    is_review = pv_existing.is_review
+
                 if is_review:
-                    # Initialize Pipeline Job
+                    # Queue pipeline job for review creation
                     job_uuid = uuid.uuid4()
                     job = PipelineJob(
                         job_uuid=job_uuid,
@@ -122,7 +124,6 @@ async def run_channel_scan():
                     session.add(job)
                     await session.flush()
                     
-                    # Push job payload to Redis pipeline queue
                     job_payload = {
                         "job_uuid": str(job_uuid),
                         "video_id": video["video_id"],
@@ -134,7 +135,6 @@ async def run_channel_scan():
                     logger.info("Scout Agent: New review discovered and queued", 
                                 title=video["video_title"], job_uuid=str(job_uuid))
             
-            # Update last scan timestamp for the channel
             channel.last_scanned_at = datetime.now(timezone.utc)
             await session.commit()
             
