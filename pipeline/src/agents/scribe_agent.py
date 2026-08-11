@@ -36,14 +36,10 @@ def parse_json3_transcript(content: dict) -> str:
     return re.sub(r'\s+', ' ', raw_str).strip()
 
 async def fetch_transcript_with_ytdlp(video_id: str) -> tuple[str, str]:
-    """
-    Fetches YouTube video transcript using youtube-transcript-api or yt-dlp.
-    """
     loop = asyncio.get_event_loop()
     url = f"https://www.youtube.com/watch?v={video_id}"
     supported_langs = ["en", "hi", "te", "ta", "ml", "kn", "mr"]
     
-    # Method 1: YouTubeTranscriptApi static list_transcripts method
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         transcript_list = await loop.run_in_executor(
@@ -69,7 +65,6 @@ async def fetch_transcript_with_ytdlp(video_id: str) -> tuple[str, str]:
     except Exception as e:
         logger.warn("youtube-transcript-api list_transcripts failed", video_id=video_id, error=str(e))
 
-    # Method 2: Fallback to yt-dlp with player clients
     for client_type in [["mweb"], ["web_embedded"], ["android_creator"], ["tv_embedded"]]:
         try:
             ydl_opts = {
@@ -78,58 +73,47 @@ async def fetch_transcript_with_ytdlp(video_id: str) -> tuple[str, str]:
                 "skip_download": True,
                 "subtitleslangs": supported_langs,
                 "subtitlesformat": "json3",
-                "quiet": True,
-                "no_warnings": True,
+                "outtmpl": os.path.join(SCRATCH_DIR, f"{video_id}.%(ext)s"),
                 "extractor_args": {"youtube": {"player_client": client_type}}
             }
 
-            def _extract():
+            def extract_sub():
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    return ydl.extract_info(url, download=False)
+                    return ydl.extract_info(url, download=True)
 
-            info = await loop.run_in_executor(None, _extract)
+            info = await loop.run_in_executor(None, extract_sub)
+            
+            json3_files = glob.glob(os.path.join(SCRATCH_DIR, f"{video_id}*.json3"))
+            if not json3_files:
+                sub_tracks = info.get("requested_subtitles") or info.get("subtitles") or info.get("automatic_captions")
+                if sub_tracks:
+                    for lang_key in supported_langs:
+                        if lang_key in sub_tracks:
+                            for track in sub_tracks[lang_key]:
+                                if track.get("ext") == "json3" and "url" in track:
+                                    async with httpx.AsyncClient() as client:
+                                        res = await client.get(track["url"])
+                                        if res.status_code == 200:
+                                            text = parse_json3_transcript(res.json())
+                                            if len(text) > 100:
+                                                return lang_key, text
 
-            subtitles = info.get("subtitles", {})
-            automatic_captions = info.get("automatic_captions", {})
+            for fpath in json3_files:
+                with open(fpath, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    text = parse_json3_transcript(data)
+                    if len(text) > 100:
+                        try:
+                            os.remove(fpath)
+                        except OSError:
+                            pass
+                        return "en", text
 
-            caption_url = None
-            detected_language = "en"
-
-            for lang in supported_langs:
-                subs_list = subtitles.get(lang) or automatic_captions.get(lang)
-                if subs_list:
-                    for sub in subs_list:
-                        if sub.get("ext") == "json3":
-                            caption_url = sub["url"]
-                            detected_language = lang
-                            break
-                    if caption_url:
-                        break
-                    if subs_list:
-                        caption_url = subs_list[0].get("url")
-                        detected_language = lang
-                        break
-
-            if caption_url:
-                async with httpx.AsyncClient(verify=False, timeout=20.0) as http_client:
-                    resp = await http_client.get(caption_url)
-                    resp.raise_for_status()
-                    content = resp.json()
-
-                transcript = parse_json3_transcript(content)
-                if transcript.strip():
-                    logger.info("Successfully extracted YouTube transcript via json3 CDN", video_id=video_id, client=client_type, length=len(transcript))
-                    return detected_language, transcript
-        except Exception as e:
+        except Exception as err:
+            logger.warn("yt-dlp subtitle download failed", video_id=video_id, client=client_type, error=str(err))
             continue
 
-    # Method 3: Fallback metadata context
-    logger.warn("YouTube blocked cloud IP for transcript files, using Video Title & Context fallback", video_id=video_id)
-    return "en", f"Target YouTube Video ID: {video_id}"
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Transcript Database Retrieval & Translation
-# ─────────────────────────────────────────────────────────────────────────────
+    raise RuntimeError(f"Failed to fetch any transcript for video {video_id}")
 
 async def get_or_create_transcript(video_id: str) -> str:
     async with AsyncSessionFactory() as session:
@@ -137,69 +121,33 @@ async def get_or_create_transcript(video_id: str) -> str:
         res = await session.execute(stmt)
         cached = res.scalars().first()
         
-        if cached:
+        if cached and len(cached.clean_transcript) > 100:
             logger.info("Found transcript in cache database", video_id=video_id)
-            return cached.translated_text if cached.translated_text else cached.raw_transcript
-
-    logger.info("Downloading transcript from YouTube CDN", video_id=video_id)
-    lang, raw_text = await fetch_transcript_with_ytdlp(video_id)
-    
-    detected_lang = "en"
-    try:
-        detected_lang = detect(raw_text[:2000])
-    except Exception:
-        detected_lang = lang
+            return cached.clean_transcript
+            
+        lang, clean_text = await fetch_transcript_with_ytdlp(video_id)
         
-    translated_text = None
-    
-    if detected_lang not in ("en", "en-us", "en-gb") and len(raw_text) > 200:
-        try:
-            translation_prompt = ChatPromptTemplate.from_template(
-                "You are a professional translator. Translate this YouTube video transcript from its original language into clean, fluent, and grammatical English. Do not add commentary. Return ONLY the translated transcript text.\n\nTranscript:\n{transcript}"
-            )
-            translator_llm = ChatGoogleGenerativeAI(
-                model="gemini-2.5-flash",
-                google_api_key=GEMINI_API_KEY,
-                temperature=0.1
-            )
-            chain = translation_prompt | translator_llm
-            res = await chain.ainvoke({"transcript": raw_text[:25000]})
-            translated_text = res.content.strip()
-        except Exception as e:
-            logger.warn("Translation skipped due to API rate limit", error=str(e))
-
-    async with AsyncSessionFactory() as session:
-        new_cache = TranscriptCache(
+        tc = TranscriptCache(
             video_id=video_id,
-            original_language=detected_lang,
-            raw_transcript=raw_text,
-            translated_text=translated_text
+            language=lang,
+            clean_transcript=clean_text,
+            is_hindi=(lang == "hi")
         )
-        session.add(new_cache)
+        session.add(tc)
         await session.commit()
-        
-    return translated_text if translated_text else raw_text
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Structured Product Consensus Review Generation
-# ─────────────────────────────────────────────────────────────────────────────
+        logger.info("Cached new transcript in PostgreSQL", video_id=video_id, length=len(clean_text))
+        return clean_text
 
 WRITE_REVIEW_PROMPT = """
-You are an expert tech reviewer for a premier publication like GSMArena. Using the following YouTube video transcript as your PRIMARY source material, generate a comprehensive, structured product consensus review for the product reviewed in the video.
+You are a top-tier senior tech editor at ProvenPick. Your objective is to read a real YouTube video transcript and write an exhaustive, structured product review guide for buyers.
 
-CRITICAL RULES:
-1. Extract all key insights, pros, cons, display testing, battery metrics, performance benchmarks, and overall opinion DIRECTLY from the transcript.
-2. Under no circumstances should you mention YouTube, video transcripts, video creators, channels, or state that you are aggregating video reviews. Write it as an original, first-hand, independent tech review.
-3. RATING SCORE: Calculate an objective score out of 5.0 (e.g., 4.2, 4.7, 3.9, 4.8) based on pros, cons, and price-to-performance ratio mentioned in the transcript.
-4. CONTENT DEPTH: Each section's content_html must be extensive and comprehensive, containing 3-4 detailed HTML paragraphs with <h3> subheaders and clear analysis based on transcript facts.
-
-YouTube Video Title & Source Context:
+Context & Video Details:
 {rag_context}
 
-Editor Rejection Feedback (If any, resolve all of these concerns):
+Human Editor Instructions:
 {editor_comments}
 
-You must return your response as a valid JSON block matching this structure. Ensure it is pure JSON without markdown styling wrappers (like ```json).
+You must return your response as a valid JSON block matching this structure. Ensure it is pure JSON without markdown styling wrappers.
 
 JSON Format:
 {{
@@ -297,6 +245,33 @@ async def run_scribe_agent(state: OrchestratorState) -> OrchestratorState:
         state["pros"] = pros_list
         state["cons"] = cons_list
         
+        # Infer Official Category Taxonomy
+        title_lower = (state["video_title"] + " " + parsed_review.get("name", "")).lower()
+        if any(k in title_lower for k in ["phone", "mobile", "android", "iphone", "galaxy", "redmi", "pixel", "oneplus"]):
+            category_name = "Electronics -> Smartphones -> Flagship Phones"
+            l3_id = 1
+        elif any(k in title_lower for k in ["macbook", "laptop", "notebook", "chromebook", "surface"]):
+            category_name = "Computer Accessories -> Laptops -> Ultraportable Laptops"
+            l3_id = 2
+        elif any(k in title_lower for k in ["headphone", "earbud", "audio", "speaker", "soundbar", "airpods"]):
+            category_name = "Audio -> Headphones -> Wireless Earbuds"
+            l3_id = 3
+        elif any(k in title_lower for k in ["watch", "wearable", "band", "smartwatch"]):
+            category_name = "Wearables -> Smartwatches -> Fitness Trackers"
+            l3_id = 4
+        elif any(k in title_lower for k in ["tv", "oled", "refrigerator", "fridge", "ac", "purifier", "vacuum", "kitchen", "coffee", "knife"]):
+            category_name = "Home Appliances -> Kitchen Appliances -> Smart Home"
+            l3_id = 5
+        elif any(k in title_lower for k in ["ps5", "xbox", "gaming", "gpu", "rtx", "keyboard", "mouse"]):
+            category_name = "Gaming -> Consoles & Controllers"
+            l3_id = 6
+        else:
+            category_name = "Electronics -> Smartphones"
+            l3_id = 1
+
+        state["category_name"] = category_name
+        state["l3_category_id"] = l3_id
+
         pro_weight_sum = sum(p.get("weight", 4) if isinstance(p, dict) else 4 for p in pros_list)
         con_weight_sum = sum(c.get("weight", 3) if isinstance(c, dict) else 3 for c in cons_list)
         total_weight = pro_weight_sum + con_weight_sum
@@ -307,11 +282,9 @@ async def run_scribe_agent(state: OrchestratorState) -> OrchestratorState:
             math_rating = 4.5
             
         state["rating"] = max(1.0, min(5.0, math_rating))
-        logger.info("Scribe Agent: Calculated mathematical consensus score from transcript pros/cons", score=state["rating"])
         state["mindmap_mermaid"] = None
-        
         state["status"] = "critiquing"
-        logger.info("Scribe Agent: Successfully generated product review draft from transcript", product=state["name"])
+        logger.info("Scribe Agent: Successfully generated product review draft", product=state["name"], category=category_name)
 
     except Exception as e:
         logger.exception("Scribe Agent: Exception occurred during review generation", error=str(e))

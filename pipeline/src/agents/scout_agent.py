@@ -17,21 +17,31 @@ PIPELINE_QUEUE = os.environ.get("PIPELINE_QUEUE", "provenpick:pipeline_queue")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 CLASSIFICATION_PROMPT = """
-You are an expert tech journalist and product reviewer. Your task is to analyze a YouTube video title and classify whether the video is a genuine, hands-on, objective product review (or a comparison review between products), or if it is another category (vlogs, gaming, news, skits, tutorials, or raw unboxing with no testing).
+You are a strict, expert tech journalist and product review curator.
+Your task is to analyze a YouTube video title and determine if it is a SPECIFIC PRODUCT HANDS-ON REVIEW or PRODUCT COMPARISON of actual physical hardware/products.
+
+STRICT REJECTION RULES:
+- REJECT if the video is general buying advice or tips (e.g., "Things to consider before buying a phone", "10 tips for buying a laptop", "Ideal Smartphone").
+- REJECT if it is tech news, commentary, opinion vlogs, or industry rants (e.g., "OnePlus is dead", "Why Apple is wrong", "Moving on helps you grow").
+- REJECT if it is a software tutorial, OS walkthrough, or general tips/tricks.
+- REJECT if it is an unboxing with no in-depth testing.
+
+ACCEPT CRITERIA:
+- ACCEPT ONLY if the video is testing/reviewing specific physical product(s) (e.g., "Samsung Galaxy S24 Ultra Review", "SVS Pinnacle Series Review", "MacBook Air M3 vs Dell XPS 13", "Technivorm Moccamaster Review").
 
 Analyze the title:
 Video Title: "{title}"
 
 Respond with EXACTLY one of these two formats:
-- "YES" if it is a genuine review/comparison guide.
-- "NO: <reason>" if it is not (e.g. "NO: Unboxing", "NO: Vlog", "NO: Software Tutorial").
+- "YES" if and only if it is a specific physical product review or comparison.
+- "NO: <reason>" if it is general advice, news, vlog, tutorial, or non-review video.
 
 Response:
 """
 
 async def classify_video(video_title: str) -> tuple[bool, str]:
     """
-    Uses Gemini 2.5 Flash to classify if a video is a product review based on title.
+    Uses Gemini 2.5 Flash to classify if a video is a strict product review based on title.
     """
     try:
         prompt = ChatPromptTemplate.from_template(CLASSIFICATION_PROMPT)
@@ -49,12 +59,12 @@ async def classify_video(video_title: str) -> tuple[bool, str]:
         else:
             reason = response_text.replace("NO:", "").strip()
             if not reason:
-                reason = "Skipped (not classified as a review)"
+                reason = "Skipped (general advice, news, or non-review)"
             return False, reason
             
     except Exception as e:
         logger.error("Failed to classify video via LLM", title=video_title, error=str(e))
-        return True, ""
+        return False, "Classification Exception"
 
 async def run_channel_scan():
     """
@@ -77,7 +87,6 @@ async def run_channel_scan():
             videos = await get_latest_videos(channel.channel_id)
             
             for video in videos:
-                # Check if a completed job already exists for this video
                 job_check = select(PipelineJob).where(
                     PipelineJob.video_id == video["video_id"],
                     PipelineJob.status.in_(["approved", "published", "staging", "completed"])
@@ -86,17 +95,15 @@ async def run_channel_scan():
                 already_done = job_res.scalars().first()
                 
                 if already_done:
-                    continue  # Skip videos that already have an approved or published review
+                    continue
                 
-                # Check processed_videos table for non-review skip classification
                 pv_check = select(ProcessedVideo).where(ProcessedVideo.video_id == video["video_id"])
                 pv_res = await session.execute(pv_check)
                 pv_existing = pv_res.scalars().first()
                 
                 if pv_existing and not pv_existing.is_review:
-                    continue  # Skip if classified as non-review
+                    continue
                 
-                # Classify video if not yet recorded
                 if not pv_existing:
                     is_review, skip_reason = await classify_video(video["video_title"])
                     pv = ProcessedVideo(
@@ -113,7 +120,6 @@ async def run_channel_scan():
                     is_review = pv_existing.is_review
 
                 if is_review:
-                    # Queue pipeline job for review creation
                     job_uuid = uuid.uuid4()
                     job = PipelineJob(
                         job_uuid=job_uuid,
@@ -132,7 +138,7 @@ async def run_channel_scan():
                         "channel_name": video["channel_name"]
                     }
                     await redis_client.push_to_queue(PIPELINE_QUEUE, job_payload)
-                    logger.info("Scout Agent: New review discovered and queued", 
+                    logger.info("Scout Agent: New product review discovered and queued", 
                                 title=video["video_title"], job_uuid=str(job_uuid))
             
             channel.last_scanned_at = datetime.now(timezone.utc)

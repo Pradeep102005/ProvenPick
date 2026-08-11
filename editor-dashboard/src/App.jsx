@@ -3,33 +3,44 @@ import './index.css';
 
 const API_BASE = "/staging-api/reviews";
 
+const PRESET_CATEGORIES = [
+  "Electronics -> Smartphones",
+  "Electronics -> Smartphones -> Flagship Phones",
+  "Electronics -> Smartphones -> Budget Phones",
+  "Computer Accessories -> Laptops",
+  "Computer Accessories -> Laptops -> Ultraportable Laptops",
+  "Audio -> Headphones",
+  "Audio -> Headphones -> Wireless Earbuds",
+  "Audio -> Speakers -> Bookshelf Speakers",
+  "Home Appliances -> Kitchen Appliances -> Smart Home",
+  "Home Appliances -> Refrigerators",
+  "Wearables -> Smartwatches -> Fitness Trackers",
+  "Gaming -> Consoles & Controllers",
+  "Networking -> Wi-Fi Routers",
+  "Office / Productivity -> Keyboards & Accessories"
+];
+
 function App() {
   const [reviews, setReviews] = useState([]);
   const [selectedReview, setSelectedReview] = useState(null);
-  const [activeTab, setActiveTab] = useState("draft"); // draft | proscons | specs | affiliate | sources
-  const [filterStatus, setFilterStatus] = useState("all"); // all | pending | approved | rejected | published
+  const [activeTab, setActiveTab] = useState("draft");
+  const [filterStatus, setFilterStatus] = useState("all");
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Modals
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showQueueModal, setShowQueueModal] = useState(false);
   
-  // Toast Popup Notification
-  const [toast, setToast] = useState(null); // { message: string, url: string }
+  const [toast, setToast] = useState(null);
   
-  // Custom Queue Input
   const [customUrl, setCustomUrl] = useState("");
   const [queueLoading, setQueueLoading] = useState(false);
   const [queueMsg, setQueueMsg] = useState(null);
   
-  // Approve Inputs
-  const [categoryName, setCategoryName] = useState("Smartphones");
+  const [categoryName, setCategoryName] = useState(PRESET_CATEGORIES[0]);
   const [l3CategoryId, setL3CategoryId] = useState(1);
-  
-  // Reject Input
   const [rejectComments, setRejectComments] = useState("");
 
   const fetchReviews = async () => {
@@ -65,7 +76,8 @@ function App() {
   const selectReview = (review) => {
     setSelectedReview(review);
     setActiveTab("draft");
-    setCategoryName(review.category_name || "Smartphones");
+    const currentCat = review.category_name || PRESET_CATEGORIES[0];
+    setCategoryName(PRESET_CATEGORIES.includes(currentCat) ? currentCat : PRESET_CATEGORIES[0]);
     setL3CategoryId(review.l3_category_id || 1);
   };
 
@@ -148,7 +160,7 @@ function App() {
 
   return (
     <div className="app-container">
-      {/* Sliding Toast Popup Notification */}
+      {/* Toast Popup Notification */}
       {toast && (
         <div 
           style={{
@@ -165,7 +177,6 @@ function App() {
             alignItems: 'center',
             gap: '16px',
             fontWeight: '600',
-            animation: 'slideIn 0.3s ease-out',
             maxWidth: '500px'
           }}
         >
@@ -250,7 +261,7 @@ function App() {
         </div>
       </aside>
 
-      {/* Main Preview Panel */}
+      {/* Main Workspace */}
       <main className="preview-panel">
         {selectedReview ? (
           <>
@@ -458,22 +469,26 @@ function App() {
         </div>
       )}
 
-      {/* Approve Modal */}
+      {/* Approve Modal with Taxonomy Dropdown */}
       {showApproveModal && (
         <div className="modal-overlay">
           <div className="modal-content">
             <div className="modal-title">Approve & Publish Review</div>
             <div className="modal-desc">
-              Select the final taxonomy category before pushing live to website.
+              Select the official website taxonomy category where this review will be published.
             </div>
             <div className="modal-form-group">
-              <label>Category Name:</label>
-              <input
-                type="text"
+              <label>Website Category Taxonomy:</label>
+              <select
                 className="modal-input"
+                style={{ background: '#1e1e2e', color: '#fff' }}
                 value={categoryName}
                 onChange={(e) => setCategoryName(e.target.value)}
-              />
+              >
+                {PRESET_CATEGORIES.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
             </div>
             <div className="modal-actions">
               <button className="modal-btn cancel" onClick={() => setShowApproveModal(false)}>Cancel</button>
