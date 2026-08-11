@@ -36,7 +36,7 @@ async def run_publisher_agent(state: OrchestratorState) -> OrchestratorState:
     """
     Publisher Agent Node:
     POSTs the fully enriched review draft to the Staging API backend,
-    sends webhooks, and executes the polling loop waiting for Human editor response.
+    sends webhooks, and returns immediately so the pipeline queue continues processing.
     """
     product_name = state.get("name", "Unknown Product")
     logger.info("Publisher Agent: Submitting review draft to Staging API...", product=product_name)
@@ -88,54 +88,14 @@ async def run_publisher_agent(state: OrchestratorState) -> OrchestratorState:
             
             # Send Notification
             await send_discord_notification(product_name, "submitted", product_uuid)
+            
+            # Mark job as submitted/staging so queue can move to next video
+            state["status"] = "staging"
 
         except Exception as e:
             logger.exception("Publisher Agent: Network error during Staging API connection", error=str(e))
             state["error_message"] = f"Staging API connection error: {str(e)}"
             state["status"] = "failed"
             return state
-
-    # 3. Enter Human-in-the-Loop Polling Loop
-    logger.info("Publisher Agent: Entering Human-in-the-Loop polling cycle. Waiting for Editor action...", 
-                job_uuid=str(state["job_uuid"]))
-    
-    poll_url = f"{STAGING_API_URL}/api/reviews/by-job/{str(state['job_uuid'])}"
-    poll_interval = 30  # Poll every 30 seconds
-    ticks = 0
-
-    while True:
-        await asyncio.sleep(poll_interval)
-        ticks += 1
-        
-        async with httpx.AsyncClient() as client:
-            try:
-                resp = await client.get(poll_url)
-                if resp.status_code != 200:
-                    logger.warn("Publisher Agent: Polling failed, retrying in next cycle", status_code=resp.status_code)
-                    continue
-                    
-                review_db = resp.json()
-                db_status = review_db.get("status")
-
-                if ticks % 10 == 0:  # Log status every 5 minutes
-                    logger.info("Publisher Agent: Still polling review status...", 
-                                product=product_name, status=db_status, elapsed_mins=int((ticks*30)/60))
-
-                if db_status == "approved":
-                    logger.info("Publisher Agent: Review APPROVED by editor!", product=product_name)
-                    state["status"] = "approved"
-                    await send_discord_notification(product_name, "approved", product_uuid)
-                    break
-                    
-                elif db_status == "rejected":
-                    comments = review_db.get("editor_comments", "")
-                    logger.warn("Publisher Agent: Review REJECTED by editor.", product=product_name, comments=comments)
-                    state["status"] = "rejected"
-                    state["editor_comments"] = comments
-                    await send_discord_notification(product_name, "rejected", product_uuid, comments=comments)
-                    break
-                    
-            except Exception as e:
-                logger.error("Publisher Agent: Error occurred during polling connection", error=str(e))
 
     return state
