@@ -57,17 +57,19 @@ class ArticlePublishPayload(BaseModel):
     seo_title: Optional[str] = None
     seo_description: Optional[str] = None
     category_name: str
-    l3_category_id: int
+    l3_category_id: Optional[int] = 1
     is_featured: Optional[bool] = False
     products: List[ProductCreate]
     sources: List[ArticleSourceCreate] = []
 
 # ── Helper to Slugify ──
 def slugify(text: str) -> str:
+    if not text:
+        return "general-tech"
     text = text.lower().strip()
     text = re.sub(r'[^\w\s-]', '', text)
     text = re.sub(r'[\s_-]+', '-', text)
-    return text.strip('-')
+    return text.strip('-') or "general-tech"
 
 # ── Route: Publish Article ──
 @router.post("/publish", status_code=status.HTTP_201_CREATED)
@@ -80,8 +82,8 @@ async def publish_article(
     Inserts or updates the Article, Products, AffiliateLinks, and ArticleSources in the production database.
     Dynamically creates L1, L2, L3 categories if they don't exist.
     """
-    # 1. Ensure L1/L2/L3 category hierarchy exists
-    cat_lower = payload.category_name.lower()
+    cat_str = payload.category_name or "General Tech"
+    cat_lower = cat_str.lower()
     title_lower = payload.title.lower()
 
     if any(k in cat_lower or k in title_lower for k in ["phone", "mobile", "android", "iphone", "galaxy", "redmi", "pixel", "oneplus"]):
@@ -122,31 +124,30 @@ async def publish_article(
         await db.flush()
 
     # Find or create L3 matching category_name
-    l3_slug = slugify(payload.category_name)
+    l3_slug = slugify(cat_str)
     stmt = select(L3Category).where(L3Category.slug == l3_slug)
     res = await db.execute(stmt)
     l3 = res.scalars().first()
     if not l3:
         l3 = L3Category(
             l2_id=l2.id,
-            name=payload.category_name,
+            name=cat_str,
             slug=l3_slug,
-            description=f"Curated consensus guides for {payload.category_name}"
+            description=f"Curated consensus guides for {cat_str}"
         )
         db.add(l3)
         await db.flush()
 
-    # 2. Check if Article already exists to overwrite (idempotency)
+    # Check if Article already exists to overwrite (idempotency)
     stmt = select(Article).where(Article.article_uuid == payload.article_uuid)
     res = await db.execute(stmt)
     existing_article = res.scalars().first()
 
     if existing_article:
-        # Delete old article cascade targets (products, sources)
         await db.delete(existing_article)
         await db.flush()
 
-    # 3. Create Article
+    # Create Article
     new_article = Article(
         article_uuid=payload.article_uuid,
         l3_category_id=l3.id,
@@ -163,7 +164,7 @@ async def publish_article(
     db.add(new_article)
     await db.flush()
 
-    # 4. Create Products, AffiliateLinks
+    # Create Products, AffiliateLinks
     for prod_data in payload.products:
         new_prod = Product(
             article_id=new_article.id,
@@ -194,7 +195,7 @@ async def publish_article(
             )
             db.add(new_link)
 
-    # 5. Create Sources
+    # Create Sources
     for src_data in payload.sources:
         new_src = ArticleSource(
             article_id=new_article.id,
@@ -234,7 +235,7 @@ async def list_articles(
             "title": art.title,
             "slug": art.slug,
             "introduction": art.introduction,
-            "category_name": art.l3_category.name,
+            "category_name": art.l3_category.name if art.l3_category else "General Tech",
             "is_featured": art.is_featured,
             "published_at": art.published_at,
             "view_count": art.view_count,
@@ -302,9 +303,9 @@ async def get_article(
         "published_at": art.published_at,
         "view_count": art.view_count,
         "category": {
-            "id": art.l3_category.id,
-            "name": art.l3_category.name,
-            "slug": art.l3_category.slug
+            "id": art.l3_category.id if art.l3_category else 1,
+            "name": art.l3_category.name if art.l3_category else "General Tech",
+            "slug": art.l3_category.slug if art.l3_category else "general-tech"
         },
         "products": [
             {
@@ -331,42 +332,11 @@ async def get_article(
         ],
         "sources": [
             {
-                "video_title": s.video_title,
+                "id": s.id,
                 "video_url": s.video_url,
+                "video_title": s.video_title,
                 "channel": s.channel
             }
             for s in art.sources
         ]
     }
-
-# ── Route: Record Article View ──
-@router.post("/{slug}/view")
-async def record_view(
-    slug: str,
-    db: AsyncSession = Depends(get_session)
-):
-    stmt = select(Article).where(Article.slug == slug)
-    res = await db.execute(stmt)
-    art = res.scalars().first()
-    if not art:
-        raise HTTPException(status_code=404, detail="Article not found")
-        
-    art.view_count += 1
-    await db.commit()
-    return {"status": "ok", "view_count": art.view_count}
-
-# ── Route: Record Affiliate Click ──
-@router.post("/affiliate/click/{link_id}")
-async def record_affiliate_click(
-    link_id: int,
-    db: AsyncSession = Depends(get_session)
-):
-    stmt = select(AffiliateLink).where(AffiliateLink.id == link_id)
-    res = await db.execute(stmt)
-    link = res.scalars().first()
-    if not link:
-        raise HTTPException(status_code=404, detail="Affiliate link not found")
-        
-    link.click_count += 1
-    await db.commit()
-    return {"status": "ok", "click_count": link.click_count}
