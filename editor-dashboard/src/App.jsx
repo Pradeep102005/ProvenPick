@@ -5,19 +5,52 @@ const API_BASE = "/staging-api/reviews";
 
 const PRESET_CATEGORIES = [
   "Electronics -> Smartphones",
-  "Electronics -> Smartphones -> Flagship Phones",
-  "Electronics -> Smartphones -> Budget Phones",
-  "Computer Accessories -> Laptops",
-  "Computer Accessories -> Laptops -> Ultraportable Laptops",
+  "Electronics -> Laptops",
+  "Electronics -> Tablets",
+  "Electronics -> Monitors",
+  "Electronics -> TVs",
+  "Electronics -> Cameras",
+  "Electronics -> Printers",
+  "Computer Accessories -> Keyboards",
+  "Computer Accessories -> Mice",
+  "Computer Accessories -> Headsets",
+  "Computer Accessories -> Webcams",
+  "Computer Accessories -> USB Hubs",
+  "Audio -> Wireless Earbuds",
   "Audio -> Headphones",
-  "Audio -> Headphones -> Wireless Earbuds",
-  "Audio -> Speakers -> Bookshelf Speakers",
-  "Home Appliances -> Kitchen Appliances -> Smart Home",
+  "Audio -> Soundbars",
+  "Audio -> Bluetooth Speakers",
   "Home Appliances -> Refrigerators",
-  "Wearables -> Smartwatches -> Fitness Trackers",
-  "Gaming -> Consoles & Controllers",
-  "Networking -> Wi-Fi Routers",
-  "Office / Productivity -> Keyboards & Accessories"
+  "Home Appliances -> Washing Machines",
+  "Home Appliances -> Air Conditioners",
+  "Home Appliances -> Air Purifiers",
+  "Home Appliances -> Vacuum Cleaners",
+  "Kitchen Appliances -> Mixer Grinders",
+  "Kitchen Appliances -> Microwaves",
+  "Kitchen Appliances -> Air Fryers",
+  "Kitchen Appliances -> Coffee Makers",
+  "Kitchen Appliances -> Electric Kettles",
+  "Kitchen Appliances -> Rice Cookers",
+  "Gaming -> Consoles",
+  "Gaming -> Gaming PCs",
+  "Gaming -> Gaming Chairs",
+  "Gaming -> Controllers",
+  "Gaming -> VR",
+  "Smart Home -> Smart Lights",
+  "Smart Home -> Security Cameras",
+  "Smart Home -> Smart Locks",
+  "Smart Home -> Doorbells",
+  "Smart Home -> Plugs",
+  "Networking -> Routers",
+  "Networking -> Mesh Systems",
+  "Networking -> Switches",
+  "Wearables -> Smartwatches",
+  "Wearables -> Fitness Bands",
+  "Wearables -> Smart Rings",
+  "Office / Productivity -> Chairs",
+  "Office / Productivity -> Standing Desks",
+  "Office / Productivity -> Desk Lamps",
+  "Others"
 ];
 
 function App() {
@@ -58,9 +91,13 @@ function App() {
       
       if (selectedReview) {
         const updated = data.find(r => r.product_uuid === selectedReview.product_uuid);
-        if (updated) setSelectedReview(updated);
+        if (updated) {
+          setSelectedReview(updated);
+          setCategoryName(updated.category_name || PRESET_CATEGORIES[0]);
+        }
       } else if (data.length > 0) {
         setSelectedReview(data[0]);
+        setCategoryName(data[0].category_name || PRESET_CATEGORIES[0]);
       }
     } catch (err) {
       setError(err.message);
@@ -287,7 +324,10 @@ function App() {
                     
                     <button 
                       className="action-btn approve"
-                      onClick={() => setShowApproveModal(true)}
+                      onClick={() => {
+                        setCategoryName(selectedReview.category_name || PRESET_CATEGORIES[0]);
+                        setShowApproveModal(true);
+                      }}
                     >
                       ✓ Approve & Publish Now
                     </button>
@@ -339,7 +379,9 @@ function App() {
               {activeTab === 'draft' && (
                 <div>
                   <div style={{ background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: '12px', padding: '20px', marginBottom: '24px' }}>
-                    <div style={{ color: '#818cf8', fontWeight: 'bold', fontSize: '12px', letterSpacing: '1px', marginBottom: '6px' }}>AI SUMMARY VERDICT</div>
+                    <div style={{ color: '#818cf8', fontWeight: 'bold', fontSize: '12px', letterSpacing: '1px', marginBottom: '6px' }}>
+                      AI CATEGORY CLASSIFICATION: <span style={{ color: '#34d399' }}>{selectedReview.category_name || "Others"}</span>
+                    </div>
                     <p style={{ color: '#e0e7ff', lineHeight: '1.6' }}>{selectedReview.summary}</p>
                   </div>
 
@@ -469,19 +511,19 @@ function App() {
         </div>
       )}
 
-      {/* Approve Modal with Taxonomy Dropdown */}
+      {/* Approve Modal with Official Taxonomy Dropdown */}
       {showApproveModal && (
         <div className="modal-overlay">
           <div className="modal-content">
             <div className="modal-title">Approve & Publish Review</div>
             <div className="modal-desc">
-              Select the official website taxonomy category where this review will be published.
+              Verify or override the category taxonomy where this review will sit live on provenpick.xyz.
             </div>
             <div className="modal-form-group">
               <label>Website Category Taxonomy:</label>
               <select
                 className="modal-input"
-                style={{ background: '#1e1e2e', color: '#fff' }}
+                style={{ background: '#1e1e2e', color: '#fff', fontSize: '14px', padding: '10px' }}
                 value={categoryName}
                 onChange={(e) => setCategoryName(e.target.value)}
               >

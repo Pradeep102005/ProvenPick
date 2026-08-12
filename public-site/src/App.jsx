@@ -14,7 +14,7 @@ const L1_CATEGORIES_LIST = [
   "Networking",
   "Wearables",
   "Office / Productivity",
-  "Smartphones"
+  "Others"
 ];
 
 function App() {
@@ -30,7 +30,6 @@ function App() {
   const [selectedL1, setSelectedL1] = useState("All");
   const [selectedL2, setSelectedL2] = useState("All");
 
-  // BEST Carousel Slide Index
   const [bestIndex, setBestIndex] = useState(0);
 
   const fetchCategories = async () => {
@@ -102,11 +101,9 @@ function App() {
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  // Find L2 subcategories for currently selected L1
   const currentL1Obj = categoriesTree.find(c => c.name.toLowerCase() === selectedL1.toLowerCase());
   const l2Subcategories = currentL1Obj ? currentL1Obj.l2_categories : [];
 
-  // Strict Category Filtering: Only articles belonging to selected L1 & L2
   const filteredArticles = articles.filter(a => {
     const catName = (a.category_name || "").toLowerCase();
     const titleText = (a.title || "").toLowerCase();
@@ -124,7 +121,6 @@ function App() {
       l2Subcategories.some(l2 => catName.includes(l2.name.toLowerCase()));
   });
 
-  // BEST Carousel Items: Pick top article per category
   const bestCarouselItems = L1_CATEGORIES_LIST.filter(c => c !== "All").map(catName => {
     const matched = articles.find(a => {
       const cn = (a.category_name || "").toLowerCase();
@@ -149,7 +145,7 @@ function App() {
 
   return (
     <div className="site-wrapper" style={{ background: '#090a0f', color: '#f3f4f6', minHeight: '100vh', width: '100%' }}>
-      {/* 1. Yellow Announcement Bar */}
+      {/* Top Banner */}
       <div className="cnet-top-banner" style={{ background: '#d9f99d', color: '#111827', padding: '8px 24px', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
         <div>
           <span style={{ background: '#111827', color: '#d9f99d', padding: '2px 8px', borderRadius: '4px', marginRight: '8px', fontSize: '11px' }}>PROVENPICK</span>
@@ -158,7 +154,7 @@ function App() {
         <div>⚡ EXPERT TESTED & VERIFIED</div>
       </div>
 
-      {/* 2. Top Header Navbar without redundant badges */}
+      {/* Header */}
       <header className="cnet-header-dark" style={{ background: '#0f172a', borderBottom: '1px solid #1e293b', padding: '14px 0' }}>
         <div className="cnet-container" style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div 
@@ -170,7 +166,6 @@ function App() {
             </div>
           </div>
 
-          {/* 11 Clean Horizontal Navbar Category Tabs */}
           <nav className="cnet-nav-categories" style={{ display: 'flex', gap: '18px', overflowX: 'auto', padding: '4px 0' }}>
             {L1_CATEGORIES_LIST.map(cat => (
               <span
@@ -192,7 +187,6 @@ function App() {
           </nav>
         </div>
 
-        {/* L2 Subcategory Pills Bar */}
         {l2Subcategories.length > 0 && (
           <div style={{ background: '#090a0f', borderTop: '1px solid #1e293b', padding: '10px 0' }}>
             <div className="cnet-container" style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 24px', display: 'flex', gap: '10px', overflowX: 'auto' }}>
@@ -216,7 +210,7 @@ function App() {
         )}
       </header>
 
-      {/* Main Body Area */}
+      {/* Main Body */}
       <div className="cnet-container" style={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
         {selectedArticle ? (
           /* Article Detail View */
@@ -307,7 +301,7 @@ function App() {
                   </div>
                 </div>
 
-                {/* Right Product Card */}
+                {/* Right Sticky Product Card */}
                 {articleDetail.products?.[0] && (
                   <div>
                     <div style={{ background: '#1e293b', borderRadius: '12px', padding: '24px', position: 'sticky', top: '20px' }}>
@@ -328,6 +322,11 @@ function App() {
                           Check Price on {link.platform?.toUpperCase()} →
                         </button>
                       ))}
+
+                      {/* Affiliate Commission Disclaimer Tagline */}
+                      <p style={{ fontSize: '11px', color: '#94a3b8', marginTop: '12px', lineHeight: '1.4', textAlign: 'center', fontStyle: 'italic' }}>
+                        ⚡ If you purchase through links on our site, we may earn an affiliate commission at no extra cost to you.
+                      </p>
                     </div>
                   </div>
                 )}
@@ -335,12 +334,10 @@ function App() {
             ) : null}
           </div>
         ) : (
-          /* Homepage / Category Grid View */
+          /* Homepage View */
           <>
             {selectedL1 === "All" && currentBestItem && currentBestItem.article ? (
-              /* BEST Horizontal Page-by-Page Carousel Box */
               <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '24px', marginBottom: '48px' }}>
-                {/* Left Yellow "BEST" Control Box */}
                 <div style={{ background: '#fef08a', color: '#111827', borderRadius: '16px', padding: '28px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   <div>
                     <div style={{ fontSize: '32px', fontWeight: '900', letterSpacing: '1px' }}>BEST</div>
@@ -356,7 +353,6 @@ function App() {
                     </h4>
                   </div>
 
-                  {/* Carousel Page Controls */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '24px' }}>
                     <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563' }}>
                       {bestIndex + 1} of {bestCarouselItems.length} Categories
@@ -378,7 +374,6 @@ function App() {
                   </div>
                 </div>
 
-                {/* Right Hero Feature Slide */}
                 <div 
                   style={{ background: '#1e293b', borderRadius: '16px', overflow: 'hidden', display: 'grid', gridTemplateColumns: '1fr 1fr', cursor: 'pointer' }}
                   onClick={() => handleSelectArticle(currentBestItem.article.slug)}
@@ -404,7 +399,6 @@ function App() {
               </div>
             ) : null}
 
-            {/* Category Header Title when filtering */}
             {selectedL1 !== "All" && (
               <div style={{ marginBottom: '24px', borderBottom: '1px solid #1e293b', paddingBottom: '16px' }}>
                 <h2 style={{ fontSize: '28px', color: '#fff' }}>
@@ -413,7 +407,6 @@ function App() {
               </div>
             )}
 
-            {/* Latest Hands-On Buying Guides (Strictly filtered by Category) */}
             <section style={{ marginTop: '32px' }}>
               <h3 style={{ fontSize: '22px', color: '#fff', marginBottom: '20px', borderBottom: '2px solid #a3e635', paddingBottom: '8px', display: 'inline-block' }}>
                 {selectedL1 === "All" ? "LATEST HANDS-ON BUYING GUIDES" : `${selectedL1.toUpperCase()} REVIEWS`}

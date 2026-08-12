@@ -25,6 +25,56 @@ os.makedirs(SCRATCH_DIR, exist_ok=True)
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
+EXACT_TAXONOMY_CATEGORIES = [
+    "Electronics -> Smartphones",
+    "Electronics -> Laptops",
+    "Electronics -> Tablets",
+    "Electronics -> Monitors",
+    "Electronics -> TVs",
+    "Electronics -> Cameras",
+    "Electronics -> Printers",
+    "Computer Accessories -> Keyboards",
+    "Computer Accessories -> Mice",
+    "Computer Accessories -> Headsets",
+    "Computer Accessories -> Webcams",
+    "Computer Accessories -> USB Hubs",
+    "Audio -> Wireless Earbuds",
+    "Audio -> Headphones",
+    "Audio -> Soundbars",
+    "Audio -> Bluetooth Speakers",
+    "Home Appliances -> Refrigerators",
+    "Home Appliances -> Washing Machines",
+    "Home Appliances -> Air Conditioners",
+    "Home Appliances -> Air Purifiers",
+    "Home Appliances -> Vacuum Cleaners",
+    "Kitchen Appliances -> Mixer Grinders",
+    "Kitchen Appliances -> Microwaves",
+    "Kitchen Appliances -> Air Fryers",
+    "Kitchen Appliances -> Coffee Makers",
+    "Kitchen Appliances -> Electric Kettles",
+    "Kitchen Appliances -> Rice Cookers",
+    "Gaming -> Consoles",
+    "Gaming -> Gaming PCs",
+    "Gaming -> Gaming Chairs",
+    "Gaming -> Controllers",
+    "Gaming -> VR",
+    "Smart Home -> Smart Lights",
+    "Smart Home -> Security Cameras",
+    "Smart Home -> Smart Locks",
+    "Smart Home -> Doorbells",
+    "Smart Home -> Plugs",
+    "Networking -> Routers",
+    "Networking -> Mesh Systems",
+    "Networking -> Switches",
+    "Wearables -> Smartwatches",
+    "Wearables -> Fitness Bands",
+    "Wearables -> Smart Rings",
+    "Office / Productivity -> Chairs",
+    "Office / Productivity -> Standing Desks",
+    "Office / Productivity -> Desk Lamps",
+    "Others"
+]
+
 def parse_json3_transcript(content: dict) -> str:
     full_text = []
     for event in content.get("events", []):
@@ -147,12 +197,63 @@ Context & Video Details:
 Human Editor Instructions:
 {editor_comments}
 
-You must return your response as a valid JSON block matching this structure. Ensure it is pure JSON without markdown styling wrappers.
+CLASSIFICATION INSTRUCTION:
+Classify the product into EXACTLY ONE of the following official taxonomy strings:
+- Electronics -> Smartphones
+- Electronics -> Laptops
+- Electronics -> Tablets
+- Electronics -> Monitors
+- Electronics -> TVs
+- Electronics -> Cameras
+- Electronics -> Printers
+- Computer Accessories -> Keyboards
+- Computer Accessories -> Mice
+- Computer Accessories -> Headsets
+- Computer Accessories -> Webcams
+- Computer Accessories -> USB Hubs
+- Audio -> Wireless Earbuds
+- Audio -> Headphones
+- Audio -> Soundbars
+- Audio -> Bluetooth Speakers
+- Home Appliances -> Refrigerators
+- Home Appliances -> Washing Machines
+- Home Appliances -> Air Conditioners
+- Home Appliances -> Air Purifiers
+- Home Appliances -> Vacuum Cleaners
+- Kitchen Appliances -> Mixer Grinders
+- Kitchen Appliances -> Microwaves
+- Kitchen Appliances -> Air Fryers
+- Kitchen Appliances -> Coffee Makers
+- Kitchen Appliances -> Electric Kettles
+- Kitchen Appliances -> Rice Cookers
+- Gaming -> Consoles
+- Gaming -> Gaming PCs
+- Gaming -> Gaming Chairs
+- Gaming -> Controllers
+- Gaming -> VR
+- Smart Home -> Smart Lights
+- Smart Home -> Security Cameras
+- Smart Home -> Smart Locks
+- Smart Home -> Doorbells
+- Smart Home -> Plugs
+- Networking -> Routers
+- Networking -> Mesh Systems
+- Networking -> Switches
+- Wearables -> Smartwatches
+- Wearables -> Fitness Bands
+- Wearables -> Smart Rings
+- Office / Productivity -> Chairs
+- Office / Productivity -> Standing Desks
+- Office / Productivity -> Desk Lamps
+- Others (Use ONLY if the product does not match any of the above)
+
+You must return your response as a valid JSON block matching this structure. Ensure it is pure JSON without markdown wrappers.
 
 JSON Format:
 {{
-  "name": "Exact Product Name (e.g. Motorola Edge 70 Pro)",
-  "brand": "Brand Name (e.g. Motorola)",
+  "category_name": "<Exact category string selected from the list above>",
+  "name": "Exact Product Name (e.g. Motorola Edge 70 Pro or TechPulse Aura Smartwatch)",
+  "brand": "Brand Name (e.g. Motorola, TechPulse, Apple, Samsung)",
   "price_inr": 39999.00,
   "review_title": "A catchy, SEO-friendly headline",
   "slug": "url-safe-lowercase-slug",
@@ -163,7 +264,7 @@ JSON Format:
     {{
       "page_index": 1,
       "title": "Introduction, Design & Build Quality",
-      "content_html": "Detailed review sections in HTML paragraphs. Use <h3> subheaders based on transcript details."
+      "content_html": "Detailed review sections in HTML paragraphs."
     }},
     {{
       "page_index": 2,
@@ -173,18 +274,17 @@ JSON Format:
     {{
       "page_index": 3,
       "title": "Consensus Verdict & Final Value",
-      "content_html": "HTML content. Final detailed buying guide based on transcript."
+      "content_html": "HTML content. Final detailed buying guide."
     }}
   ],
   "specs": {{
-    "spec_key_1": "spec_value_1",
-    "spec_key_2": "spec_value_2"
+    "spec_key_1": "spec_value_1"
   }},
   "pros": [
-    {{"text": "Pro description from transcript", "weight": 5}}
+    {{"text": "Pro description", "weight": 5}}
   ],
   "cons": [
-    {{"text": "Con description from transcript", "weight": 4}}
+    {{"text": "Con description", "weight": 4}}
   ]
 }}
 
@@ -245,32 +345,29 @@ async def run_scribe_agent(state: OrchestratorState) -> OrchestratorState:
         state["pros"] = pros_list
         state["cons"] = cons_list
         
-        # Infer Official Category Taxonomy
-        title_lower = (state["video_title"] + " " + parsed_review.get("name", "")).lower()
-        if any(k in title_lower for k in ["phone", "mobile", "android", "iphone", "galaxy", "redmi", "pixel", "oneplus"]):
-            category_name = "Electronics -> Smartphones -> Flagship Phones"
-            l3_id = 1
-        elif any(k in title_lower for k in ["macbook", "laptop", "notebook", "chromebook", "surface"]):
-            category_name = "Computer Accessories -> Laptops -> Ultraportable Laptops"
-            l3_id = 2
-        elif any(k in title_lower for k in ["headphone", "earbud", "audio", "speaker", "soundbar", "airpods"]):
-            category_name = "Audio -> Headphones -> Wireless Earbuds"
-            l3_id = 3
-        elif any(k in title_lower for k in ["watch", "wearable", "band", "smartwatch"]):
-            category_name = "Wearables -> Smartwatches -> Fitness Trackers"
-            l3_id = 4
-        elif any(k in title_lower for k in ["tv", "oled", "refrigerator", "fridge", "ac", "purifier", "vacuum", "kitchen", "coffee", "knife"]):
-            category_name = "Home Appliances -> Kitchen Appliances -> Smart Home"
-            l3_id = 5
-        elif any(k in title_lower for k in ["ps5", "xbox", "gaming", "gpu", "rtx", "keyboard", "mouse"]):
-            category_name = "Gaming -> Consoles & Controllers"
-            l3_id = 6
+        # Taxonomy Category Mapping
+        cat_llm = parsed_review.get("category_name", "").strip()
+        if cat_llm in EXACT_TAXONOMY_CATEGORIES:
+            category_name = cat_llm
         else:
-            category_name = "Electronics -> Smartphones"
-            l3_id = 1
+            title_lower = (state["video_title"] + " " + parsed_review.get("name", "")).lower()
+            if any(k in title_lower for k in ["watch", "wearable", "smartwatch", "fitness band", "smart ring"]):
+                category_name = "Wearables -> Smartwatches"
+            elif any(k in title_lower for k in ["phone", "mobile", "android", "iphone", "galaxy", "redmi", "pixel", "oneplus"]):
+                category_name = "Electronics -> Smartphones"
+            elif any(k in title_lower for k in ["laptop", "macbook", "notebook", "chromebook", "surface"]):
+                category_name = "Electronics -> Laptops"
+            elif any(k in title_lower for k in ["earbud", "airpods", "tws"]):
+                category_name = "Audio -> Wireless Earbuds"
+            elif any(k in title_lower for k in ["headphone"]):
+                category_name = "Audio -> Headphones"
+            elif any(k in title_lower for k in ["tv", "oled"]):
+                category_name = "Electronics -> TVs"
+            else:
+                category_name = "Others"
 
         state["category_name"] = category_name
-        state["l3_category_id"] = l3_id
+        state["l3_category_id"] = 1
 
         pro_weight_sum = sum(p.get("weight", 4) if isinstance(p, dict) else 4 for p in pros_list)
         con_weight_sum = sum(c.get("weight", 3) if isinstance(c, dict) else 3 for c in cons_list)
@@ -284,7 +381,7 @@ async def run_scribe_agent(state: OrchestratorState) -> OrchestratorState:
         state["rating"] = max(1.0, min(5.0, math_rating))
         state["mindmap_mermaid"] = None
         state["status"] = "critiquing"
-        logger.info("Scribe Agent: Successfully generated product review draft", product=state["name"], category=category_name)
+        logger.info("Scribe Agent: Generated review draft", product=state["name"], category=category_name)
 
     except Exception as e:
         logger.exception("Scribe Agent: Exception occurred during review generation", error=str(e))
