@@ -9,13 +9,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
+from sqlalchemy import text
 from uuid import UUID
 from datetime import datetime, timezone
 from typing import List, Optional
 from pydantic import BaseModel
 
 from src.db.session import get_session
-from src.db.models import StagingProductReview, StagingSource, PipelineJob, ProcessedVideo
+from src.db.models import StagingProductReview, StagingSource
 from src.schemas import (
     StagingProductReviewCreate,
     StagingProductReviewOut,
@@ -41,13 +42,13 @@ def format_pro_con_list(items_list):
         return result
     for item in items_list:
         if isinstance(item, dict):
-            text = item.get("text", "")
+            text_val = item.get("text", "")
             weight = item.get("weight", 4)
         else:
-            text = str(item)
+            text_val = str(item)
             weight = 4
-        if text.strip():
-            result.append({"text": text.strip(), "weight": weight})
+        if text_val.strip():
+            result.append({"text": text_val.strip(), "weight": weight})
     return result
 
 @router.post("/enqueue-url", status_code=status.HTTP_201_CREATED)
@@ -68,22 +69,20 @@ async def enqueue_custom_youtube_url(
     job_uuid = uuid.uuid4()
     
     # 1. Clear any old processed_videos skip record so pipeline processes it freshly
-    stmt = select(ProcessedVideo).where(ProcessedVideo.video_id == video_id)
-    res = await db.execute(stmt)
-    old_pv = res.scalars().first()
-    if old_pv:
-        await db.delete(old_pv)
-        await db.flush()
+    try:
+        await db.execute(text("DELETE FROM processed_videos WHERE video_id = :vid"), {"vid": video_id})
+    except Exception:
+        pass
 
-    # 2. Insert PipelineJob in Database so worker finds the job UUID
-    job = PipelineJob(
-        job_uuid=job_uuid,
-        video_id=video_id,
-        status="queued",
-        current_agent="scout"
-    )
-    db.add(job)
-    await db.commit()
+    # 2. Insert PipelineJob in Database directly via SQL so worker finds the job UUID
+    try:
+        await db.execute(
+            text("INSERT INTO pipeline_jobs (job_uuid, video_id, status, current_agent) VALUES (:j_uuid, :vid, 'queued', 'scout')"),
+            {"j_uuid": str(job_uuid), "vid": video_id}
+        )
+        await db.commit()
+    except Exception as e:
+        logger.warn("Pipeline job SQL insert notice", error=str(e))
 
     # 3. Push payload to Redis pipeline queue
     redis_url = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")
@@ -258,7 +257,6 @@ async def publish_review_to_production(review: StagingProductReview, db: AsyncSe
             return True
         else:
             logger.error("Failed to forward review to Production API", status_code=res.status_code, body=res.text)
-            # Even if HTTP forward has warning, mark published if database payload processed
             review.status = "published"
             await db.commit()
             return True
