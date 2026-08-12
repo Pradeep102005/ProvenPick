@@ -238,7 +238,7 @@ function App() {
                   </p>
 
                   <div style={{ background: '#1e293b', padding: '24px', borderRadius: '12px', marginBottom: '32px' }}>
-                    <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', gap: '16px', marginBottom: '20px' }}>
                       {["guide", "proscons", "specs"].map(tab => (
                         <button
                           key={tab}
@@ -266,22 +266,35 @@ function App() {
                     )}
 
                     {activeTab === 'proscons' && articleDetail.products?.[0] && (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                        <div style={{ background: '#064e3b', padding: '16px', borderRadius: '8px' }}>
-                          <h4 style={{ color: '#34d399', marginBottom: '12px' }}>PROS</h4>
-                          <ul style={{ paddingLeft: '20px', color: '#ecfdf5' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                        {/* Pros Card */}
+                        <div style={{ background: 'rgba(52, 211, 153, 0.05)', border: '1px solid rgba(52, 211, 153, 0.3)', borderRadius: '16px', padding: '24px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '18px' }}>
+                            <div style={{ background: '#10b981', color: '#042f2e', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>✓</div>
+                            <h4 style={{ color: '#34d399', fontSize: '18px', fontWeight: 'bold', margin: 0 }}>PROS</h4>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             {articleDetail.products[0].pros?.map((p, i) => (
-                              <li key={i}>{typeof p === 'string' ? p : p.text}</li>
+                              <div key={i} style={{ background: 'rgba(255, 255, 255, 0.03)', borderLeft: '3px solid #34d399', padding: '12px 16px', borderRadius: '8px', color: '#ecfdf5', fontSize: '14px', lineHeight: '1.5' }}>
+                                {typeof p === 'string' ? p : p.text}
+                              </div>
                             ))}
-                          </ul>
+                          </div>
                         </div>
-                        <div style={{ background: '#7f1d1d', padding: '16px', borderRadius: '8px' }}>
-                          <h4 style={{ color: '#f87171', marginBottom: '12px' }}>CONS</h4>
-                          <ul style={{ paddingLeft: '20px', color: '#fef2f2' }}>
+
+                        {/* Cons Card */}
+                        <div style={{ background: 'rgba(248, 113, 113, 0.05)', border: '1px solid rgba(248, 113, 113, 0.3)', borderRadius: '16px', padding: '24px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '18px' }}>
+                            <div style={{ background: '#ef4444', color: '#450a0a', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>✕</div>
+                            <h4 style={{ color: '#f87171', fontSize: '18px', fontWeight: 'bold', margin: 0 }}>CONS</h4>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             {articleDetail.products[0].cons?.map((c, i) => (
-                              <li key={i}>{typeof c === 'string' ? c : c.text}</li>
+                              <div key={i} style={{ background: 'rgba(255, 255, 255, 0.03)', borderLeft: '3px solid #f87171', padding: '12px 16px', borderRadius: '8px', color: '#fef2f2', fontSize: '14px', lineHeight: '1.5' }}>
+                                {typeof c === 'string' ? c : c.text}
+                              </div>
                             ))}
-                          </ul>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -323,7 +336,6 @@ function App() {
                         </button>
                       ))}
 
-                      {/* Affiliate Commission Disclaimer Tagline */}
                       <p style={{ fontSize: '11px', color: '#94a3b8', marginTop: '12px', lineHeight: '1.4', textAlign: 'center', fontStyle: 'italic' }}>
                         ⚡ If you purchase through links on our site, we may earn an affiliate commission at no extra cost to you.
                       </p>
