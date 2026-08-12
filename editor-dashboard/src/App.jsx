@@ -71,6 +71,7 @@ function App() {
   const [customUrl, setCustomUrl] = useState("");
   const [queueLoading, setQueueLoading] = useState(false);
   const [queueMsg, setQueueMsg] = useState(null);
+  const [publishingAll, setPublishingAll] = useState(false);
   
   const [categoryName, setCategoryName] = useState(PRESET_CATEGORIES[0]);
   const [l3CategoryId, setL3CategoryId] = useState(1);
@@ -147,6 +148,21 @@ function App() {
     }
   };
 
+  const handlePublishAllApproved = async () => {
+    setPublishingAll(true);
+    try {
+      const res = await fetch(`${API_BASE}/publish-all-approved`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error("Failed to bulk publish approved reviews.");
+      triggerToast(`🚀 ${data.message}`, "https://provenpick.xyz");
+      await fetchReviews();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setPublishingAll(false);
+    }
+  };
+
   const handleReject = async () => {
     if (!selectedReview || !rejectComments.trim()) return;
     try {
@@ -197,7 +213,7 @@ function App() {
 
   return (
     <div className="app-container">
-      {/* Toast Popup Notification */}
+      {/* Toast Notification */}
       {toast && (
         <div 
           style={{
@@ -240,24 +256,35 @@ function App() {
         </div>
       )}
 
-      {/* Sidebar Navigation */}
+      {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-header" style={{ justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div className="logo-icon">PP</div>
             <div className="logo-text">ProvenPick Staging</div>
           </div>
-          <button 
-            className="filter-btn"
-            onClick={() => setShowQueueModal(true)}
-            style={{ background: '#6366f1', color: '#fff', fontWeight: 'bold', padding: '6px 12px' }}
-          >
-            ➕ Queue URL
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button 
+              className="filter-btn"
+              onClick={handlePublishAllApproved}
+              disabled={publishingAll}
+              style={{ background: '#10b981', color: '#fff', fontWeight: 'bold', padding: '6px 10px', fontSize: '11px' }}
+              title="Publish all approved reviews to live site"
+            >
+              {publishingAll ? "Publishing..." : "🚀 Publish Approved"}
+            </button>
+            <button 
+              className="filter-btn"
+              onClick={() => setShowQueueModal(true)}
+              style={{ background: '#6366f1', color: '#fff', fontWeight: 'bold', padding: '6px 10px', fontSize: '11px' }}
+            >
+              ➕ Queue URL
+            </button>
+          </div>
         </div>
 
         <div className="sidebar-filters">
-          {["all", "pending", "published", "rejected"].map((status) => (
+          {["all", "pending", "approved", "published", "rejected"].map((status) => (
             <button
               key={status}
               className={`filter-btn ${filterStatus === status ? 'active' : ''}`}
@@ -313,7 +340,7 @@ function App() {
                   ★ Pin Flashcard
                 </button>
 
-                {selectedReview.status === "pending" && (
+                {(selectedReview.status === "pending" || selectedReview.status === "approved") && (
                   <>
                     <button 
                       className="action-btn reject"
@@ -329,7 +356,7 @@ function App() {
                         setShowApproveModal(true);
                       }}
                     >
-                      ✓ Approve & Publish Now
+                      ✓ {selectedReview.status === "approved" ? "Push to Live Site Now" : "Approve & Publish Now"}
                     </button>
                   </>
                 )}
@@ -473,7 +500,7 @@ function App() {
         )}
       </main>
 
-      {/* Queue Custom YouTube URL Modal */}
+      {/* Queue Modal */}
       {showQueueModal && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -511,7 +538,7 @@ function App() {
         </div>
       )}
 
-      {/* Approve Modal with Official Taxonomy Dropdown */}
+      {/* Approve Modal */}
       {showApproveModal && (
         <div className="modal-overlay">
           <div className="modal-content">

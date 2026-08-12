@@ -30,14 +30,16 @@ router = APIRouter(prefix="/api/reviews", tags=["reviews"])
 class EnqueueUrlRequest(BaseModel):
     url: str
 
+def safe_text(item) -> str:
+    if isinstance(item, dict):
+        return item.get("text", "")
+    return str(item) if item is not None else ""
+
 @router.post("/enqueue-url", status_code=status.HTTP_201_CREATED)
 async def enqueue_custom_youtube_url(
     payload: EnqueueUrlRequest,
     db: AsyncSession = Depends(get_session)
 ):
-    """
-    Allows Admin Editor to push a custom YouTube video URL directly into the AI pipeline queue.
-    """
     url = payload.url.strip()
     match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
     if not match:
@@ -167,6 +169,59 @@ async def get_review_by_uuid(
         raise HTTPException(status_code=404, detail="Product review not found.")
     return review
 
+async def publish_review_to_production(review: StagingProductReview, db: AsyncSession):
+    """
+    Helper function to publish a staging review to the Production API.
+    """
+    prod_payload = {
+        "article_uuid": str(review.product_uuid),
+        "title": review.review_title,
+        "slug": review.slug,
+        "introduction": review.summary,
+        "full_article_html": "".join([sec.get("content_html", "") for sec in review.review_sections]),
+        "mindmap_image_url": review.mindmap_mermaid,
+        "bullet_points": [safe_text(p) for p in (review.pros or [])[:3]],
+        "seo_title": f"{review.review_title} | ProvenPick Verdict",
+        "seo_description": review.summary,
+        "category_name": review.category_name,
+        "l3_category_id": review.l3_category_id or 1,
+        "is_featured": True,
+        "products": [
+            {
+                "name": review.name,
+                "brand": review.brand,
+                "price_inr": float(review.price_inr) if review.price_inr is not None else None,
+                "pick_label": "Editor's Verified Pick",
+                "pick_type": "top_pick",
+                "pros": review.pros or [],
+                "cons": review.cons or [],
+                "specs": review.specs or {},
+                "image_url": review.image_urls[0] if (review.image_urls and len(review.image_urls) > 0) else None,
+                "affiliate_links": review.affiliate_links or []
+            }
+        ],
+        "sources": [
+            {
+                "video_url": s.video_url,
+                "video_title": s.video_title,
+                "channel": s.channel_name
+            }
+            for s in (review.sources or [])
+        ]
+    }
+
+    prod_api_url = os.environ.get("PRODUCTION_API_URL", "http://127.0.0.1:8002")
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        res = await client.post(f"{prod_api_url}/api/articles/publish", json=prod_payload)
+        if res.status_code in (200, 201):
+            review.status = "published"
+            await db.commit()
+            logger.info("Successfully published review to production website!", product=review.name)
+            return True
+        else:
+            logger.error("Failed to forward review to Production API", status_code=res.status_code, text=res.text)
+            return False
+
 @router.patch("/{uuid}/approve", status_code=status.HTTP_200_OK)
 async def approve_review(
     uuid: UUID,
@@ -189,58 +244,35 @@ async def approve_review(
     review.reviewed_at = datetime.now(timezone.utc)
     await db.commit()
 
-    # Forward to Production API
-    prod_payload = {
-        "article_uuid": str(review.product_uuid),
-        "title": review.review_title,
-        "slug": review.slug,
-        "introduction": review.summary,
-        "full_article_html": "".join([sec.get("content_html", "") for sec in review.review_sections]),
-        "mindmap_image_url": review.mindmap_mermaid,
-        "bullet_points": [p.get("text", "") for p in review.pros[:3]],
-        "seo_title": f"{review.review_title} | ProvenPick Verdict",
-        "seo_description": review.summary,
-        "category_name": review.category_name,
-        "l3_category_id": review.l3_category_id,
-        "is_featured": True,
-        "products": [
-            {
-                "name": review.name,
-                "brand": review.brand,
-                "price_inr": float(review.price_inr) if review.price_inr is not None else None,
-                "pick_label": "Editor's Verified Pick",
-                "pick_type": "top_pick",
-                "pros": review.pros,
-                "cons": review.cons,
-                "specs": review.specs,
-                "image_url": review.image_urls[0] if review.image_urls else None,
-                "affiliate_links": review.affiliate_links
-            }
-        ],
-        "sources": [
-            {
-                "video_url": s.video_url,
-                "video_title": s.video_title,
-                "channel": s.channel_name
-            }
-            for s in review.sources
-        ]
-    }
+    # Publish to Production
+    try:
+        success = await publish_review_to_production(review, db)
+        if not success:
+            logger.warn("Publishing failed, review saved in approved state", uuid=str(uuid))
+    except Exception as e:
+        logger.exception("Error publishing to Production API", error=str(e))
 
-    prod_api_url = os.environ.get("PRODUCTION_API_URL", "http://127.0.0.1:8002")
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    return {"message": "Review approved and publishing processed!", "status": review.status}
+
+@router.post("/publish-all-approved", status_code=status.HTTP_200_OK)
+async def publish_all_approved_reviews(db: AsyncSession = Depends(get_session)):
+    """
+    Bulk endpoint to publish any reviews stuck in 'approved' status to Production API.
+    """
+    stmt = select(StagingProductReview).where(StagingProductReview.status == "approved").options(selectinload(StagingProductReview.sources))
+    res = await db.execute(stmt)
+    approved_reviews = res.scalars().all()
+    
+    published_count = 0
+    for review in approved_reviews:
         try:
-            res = await client.post(f"{prod_api_url}/api/articles/publish", json=prod_payload)
-            if res.status_code in (200, 201):
-                review.status = "published"
-                await db.commit()
-                logger.info("Successfully published review to production website!", product=review.name)
-            else:
-                logger.error("Failed to forward review to Production API", status_code=res.status_code, text=res.text)
+            ok = await publish_review_to_production(review, db)
+            if ok:
+                published_count += 1
         except Exception as e:
-            logger.exception("Error connecting to Production API", error=str(e))
-
-    return {"message": "Review approved and sent to Production!", "status": review.status}
+            logger.exception("Error during bulk approval publishing", uuid=str(review.product_uuid), error=str(e))
+            
+    return {"message": f"Successfully published {published_count} approved reviews to live site!", "published_count": published_count}
 
 @router.patch("/{uuid}/reject", status_code=status.HTTP_200_OK)
 async def reject_review(
