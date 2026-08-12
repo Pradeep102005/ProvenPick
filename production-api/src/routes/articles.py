@@ -77,11 +77,6 @@ async def publish_article(
     payload: ArticlePublishPayload,
     db: AsyncSession = Depends(get_session)
 ):
-    """
-    Called by Staging API when a review is approved.
-    Inserts or updates the Article, Products, AffiliateLinks, and ArticleSources in the production database.
-    Dynamically creates L1, L2, L3 categories if they don't exist.
-    """
     cat_str = payload.category_name or "General Tech"
     cat_lower = cat_str.lower()
     title_lower = payload.title.lower()
@@ -147,10 +142,11 @@ async def publish_article(
         await db.delete(existing_article)
         await db.flush()
 
-    # Create Article
+    # Create Article with direct category_name string
     new_article = Article(
         article_uuid=payload.article_uuid,
-        l3_category_id=l3.id,
+        l3_category_id=l3.id if l3 else None,
+        category_name=cat_str,
         title=payload.title,
         slug=payload.slug,
         introduction=payload.introduction or payload.title,
@@ -214,9 +210,6 @@ async def list_articles(
     category_slug: Optional[str] = None,
     db: AsyncSession = Depends(get_session)
 ):
-    """
-    Fetches published articles. If category_slug is provided, filters by L3 category.
-    """
     stmt = select(Article).where(Article.is_published == True).options(
         selectinload(Article.l3_category),
         selectinload(Article.products)
@@ -235,7 +228,7 @@ async def list_articles(
             "title": art.title,
             "slug": art.slug,
             "introduction": art.introduction,
-            "category_name": art.l3_category.name if art.l3_category else "General Tech",
+            "category_name": art.category_name or (art.l3_category.name if art.l3_category else "General Tech"),
             "is_featured": art.is_featured,
             "published_at": art.published_at,
             "view_count": art.view_count,
@@ -274,9 +267,6 @@ async def get_article(
     slug: str,
     db: AsyncSession = Depends(get_session)
 ):
-    """
-    Fetches a published article detail, complete with products, affiliate links, and sources.
-    """
     stmt = select(Article).where(Article.slug == slug).options(
         selectinload(Article.products).selectinload(Product.affiliate_links),
         selectinload(Article.sources),
@@ -291,12 +281,14 @@ async def get_article(
             detail=f"Article with slug '{slug}' not found"
         )
         
+    cat_name = art.category_name or (art.l3_category.name if art.l3_category else "General Tech")
     return {
         "id": art.id,
         "article_uuid": art.article_uuid,
         "title": art.title,
         "slug": art.slug,
         "introduction": art.introduction,
+        "category_name": cat_name,
         "full_article_html": art.full_article_html,
         "mindmap_image_url": art.mindmap_image_url,
         "bullet_points": art.bullet_points,
@@ -304,8 +296,8 @@ async def get_article(
         "view_count": art.view_count,
         "category": {
             "id": art.l3_category.id if art.l3_category else 1,
-            "name": art.l3_category.name if art.l3_category else "General Tech",
-            "slug": art.l3_category.slug if art.l3_category else "general-tech"
+            "name": cat_name,
+            "slug": slugify(cat_name)
         },
         "products": [
             {
