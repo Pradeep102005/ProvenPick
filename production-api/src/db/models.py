@@ -2,9 +2,9 @@ import uuid
 from datetime import datetime, timezone
 from sqlalchemy import (
     Boolean, Column, DateTime, ForeignKey,
-    Integer, Numeric, String, Text
+    Integer, Numeric, String, Text, JSON
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, relationship
 
 
@@ -79,7 +79,7 @@ class Article(Base):
     introduction      = Column(Text)
     full_article_html = Column(Text, nullable=False)
     mindmap_image_url = Column(String(1024))
-    bullet_points     = Column(JSONB, default=list)
+    bullet_points     = Column(JSON, default=list)
     seo_title         = Column(String(70))
     seo_description   = Column(String(160))
     is_published      = Column(Boolean, default=True)
@@ -107,9 +107,9 @@ class Product(Base):
     pick_label     = Column(String(100))
     pick_type      = Column(String(50))
     target_persona = Column(String(255))
-    pros           = Column(JSONB, default=list)
-    cons           = Column(JSONB, default=list)
-    specs          = Column(JSONB, default=dict)
+    pros           = Column(JSON, default=list)
+    cons           = Column(JSON, default=list)
+    specs          = Column(JSON, default=dict)
     best_for       = Column(Text)
     skip_if        = Column(Text)
     image_url      = Column(String(1024))

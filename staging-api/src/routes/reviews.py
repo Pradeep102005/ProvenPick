@@ -3,7 +3,6 @@ import re
 import json
 import uuid
 import httpx
-import structlog
 import redis.asyncio as redis_async
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +23,12 @@ from src.schemas import (
     ReviewReject
 )
 
-logger = structlog.get_logger()
+try:
+    import structlog
+    logger = structlog.get_logger()
+except ImportError:
+    import logging
+    logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/reviews", tags=["reviews"])
 
@@ -56,10 +60,6 @@ async def enqueue_custom_youtube_url(
     payload: EnqueueUrlRequest,
     db: AsyncSession = Depends(get_session)
 ):
-    """
-    Allows Admin Editor to push a custom YouTube video URL directly into the AI pipeline queue.
-    Creates PipelineJob entry in DB and pushes to Redis queue.
-    """
     url = payload.url.strip()
     match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
     if not match:
@@ -68,13 +68,11 @@ async def enqueue_custom_youtube_url(
     video_id = match.group(1)
     job_uuid = uuid.uuid4()
     
-    # 1. Clear any old processed_videos skip record so pipeline processes it freshly
     try:
         await db.execute(text("DELETE FROM processed_videos WHERE video_id = :vid"), {"vid": video_id})
     except Exception:
         pass
 
-    # 2. Insert PipelineJob in Database directly via SQL so worker finds the job UUID
     try:
         await db.execute(
             text("INSERT INTO pipeline_jobs (job_uuid, video_id, status, current_agent) VALUES (:j_uuid, :vid, 'queued', 'scout')"),
@@ -84,7 +82,6 @@ async def enqueue_custom_youtube_url(
     except Exception as e:
         logger.warn("Pipeline job SQL insert notice", error=str(e))
 
-    # 3. Push payload to Redis pipeline queue
     redis_url = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")
     r = redis_async.from_url(redis_url, decode_responses=True, socket_timeout=10.0)
     
@@ -207,9 +204,6 @@ async def get_review_by_uuid(
     return review
 
 async def publish_review_to_production(review: StagingProductReview, db: AsyncSession):
-    """
-    Helper function to publish a staging review to the Production API.
-    """
     prod_payload = {
         "article_uuid": str(review.product_uuid),
         "title": review.review_title,
@@ -283,7 +277,6 @@ async def approve_review(
     review.status = "published"
     await db.commit()
 
-    # Publish to Production
     try:
         await publish_review_to_production(review, db)
     except Exception as e:
@@ -295,9 +288,6 @@ async def approve_review(
 
 @router.post("/publish-all-approved", status_code=status.HTTP_200_OK)
 async def publish_all_approved_reviews(db: AsyncSession = Depends(get_session)):
-    """
-    Bulk endpoint to convert ALL approved/stuck reviews to 'published' status on production website.
-    """
     stmt = select(StagingProductReview).where(StagingProductReview.status.in_(["approved", "pending"])).options(selectinload(StagingProductReview.sources))
     res = await db.execute(stmt)
     reviews_to_publish = res.scalars().all()

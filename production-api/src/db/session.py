@@ -1,16 +1,13 @@
-"""
-Async SQLAlchemy session factory — Production DB
-"""
 import os
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from .models import Base
 
-DATABASE_URL = os.environ.get(
-    "PRODUCTION_DATABASE_URL",
-    "postgresql+asyncpg://provenpick:provenpick123@localhost:5434/provenpick_production"
-)
+db_url = os.environ.get("PRODUCTION_DATABASE_URL")
+if not db_url:
+    # Use local SQLite database file for local development if PostgreSQL URL is not set
+    db_url = "sqlite+aiosqlite:///c:/Users/prade/Desktop/ProvenPick/provenpick_production.db"
 
-engine = create_async_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
+engine = create_async_engine(db_url, echo=False)
 AsyncSessionFactory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 
