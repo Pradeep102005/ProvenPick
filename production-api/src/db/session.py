@@ -4,7 +4,6 @@ from .models import Base
 
 db_url = os.environ.get("PRODUCTION_DATABASE_URL")
 if not db_url:
-    # Use local SQLite database file for local development if PostgreSQL URL is not set
     db_url = "sqlite+aiosqlite:///c:/Users/prade/Desktop/ProvenPick/provenpick_production.db"
 
 engine = create_async_engine(db_url, echo=False)

@@ -3,7 +3,10 @@ import re
 import json
 import uuid
 import httpx
-import redis.asyncio as redis_async
+try:
+    import redis.asyncio as redis_async
+except ImportError:
+    redis_async = None
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
