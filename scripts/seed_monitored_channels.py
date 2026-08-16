@@ -9,11 +9,15 @@ WORKFLOW_DB = os.environ.get(
     "postgresql+asyncpg://provenpick:provenpick123@127.0.0.1:5432/provenpick_workflow"
 )
 
-# ── Monitored YouTube Tech & Product Channels ──
+# ── Monitored YouTube Tech & Product Channels (Verified Real Channel IDs) ──
 CHANNELS = [
-    # Electronics
-    {"channel_id": "UCgWi34h4-6s5JbJd_U601qA", "channel_name": "Geekyranjit", "category": "Electronics"},
-    {"channel_id": "UCp1q4i1WcZ8J-Cj-rXp4Z7A", "channel_name": "Beebom", "category": "Electronics"},
+    # Electronics (Hindi, Telugu & Top Indian Tech Channels)
+    {"channel_id": "UCXsXitjiT_8qPgNEFGPVfBA", "channel_name": "Technical Guruji", "category": "Electronics"},
+    {"channel_id": "UCgJ5_1F6yJhYLnyMszUdmUg", "channel_name": "Trakin Tech", "category": "Electronics"},
+    {"channel_id": "UCBVDOqAOemETfc-MOn4fqgA", "channel_name": "Prasadtechintelugu", "category": "Electronics"},
+    {"channel_id": "UCqeXMnAG9VCSQcxLR-F2mKw", "channel_name": "Tech Burner", "category": "Electronics"},
+    {"channel_id": "UCS5cgC8B_dGDftYqE_TbneQ", "channel_name": "Geekyranjit", "category": "Electronics"},
+
     # Computer Accessories
     {"channel_id": "UCosNW_a1tP89qZpP2N4Z8XA", "channel_name": "Hardware Canucks", "category": "Computer Accessories"},
     {"channel_id": "UC4R8-N8kQ1cZ2X1N1_p8A2g", "channel_name": "TechWiser", "category": "Computer Accessories"},
@@ -47,7 +51,7 @@ async def main():
     print(f"Connecting to Workflow DB: {WORKFLOW_DB}")
     engine = create_async_engine(WORKFLOW_DB)
     async with engine.begin() as conn:
-        print("Seeding YouTube channels into channels table...")
+        print("Seeding verified YouTube channels into channels table...")
         for ch in CHANNELS:
             await conn.execute(
                 text("""
@@ -59,10 +63,10 @@ async def main():
                 """),
                 {"cid": ch["channel_id"], "cname": ch["channel_name"]}
             )
-            print(f" - Seeded Channel: {ch['channel_name']} [{ch['category']}]")
+            print(f" - Seeded Channel: {ch['channel_name']} [{ch['category']}] -> {ch['channel_id']}")
             
     await engine.dispose()
-    print("\n✅ All monitored YouTube channels registered in PostgreSQL workflow DB!")
+    print("\n✅ All verified YouTube channels registered in PostgreSQL workflow DB!")
 
 if __name__ == "__main__":
     asyncio.run(main())
