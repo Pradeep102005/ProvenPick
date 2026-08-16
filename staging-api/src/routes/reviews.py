@@ -254,9 +254,7 @@ async def publish_review_to_production(review: StagingProductReview, db: AsyncSe
             return True
         else:
             logger.error("Failed to forward review to Production API", status_code=res.status_code, body=res.text)
-            review.status = "published"
-            await db.commit()
-            return True
+            return False
 
 @router.patch("/{uuid}/approve", status_code=status.HTTP_200_OK)
 async def approve_review(
@@ -277,31 +275,28 @@ async def approve_review(
         review.l3_category_id = payload.l3_category_id
         
     review.reviewed_at = datetime.now(timezone.utc)
-    review.status = "published"
+    
+    success = await publish_review_to_production(review, db)
+    if success:
+        review.status = "published"
+    else:
+        review.status = "pending"
     await db.commit()
 
-    try:
-        await publish_review_to_production(review, db)
-    except Exception as e:
-        logger.exception("Error publishing to Production API", error=str(e))
-        review.status = "published"
-        await db.commit()
-
-    return {"message": "Review published directly to live site!", "status": "published"}
+    return {"message": "Review publish request completed!", "status": review.status}
 
 @router.post("/publish-all-approved", status_code=status.HTTP_200_OK)
 async def publish_all_approved_reviews(db: AsyncSession = Depends(get_session)):
-    stmt = select(StagingProductReview).where(StagingProductReview.status.in_(["approved", "pending"])).options(selectinload(StagingProductReview.sources))
+    stmt = select(StagingProductReview).options(selectinload(StagingProductReview.sources))
     res = await db.execute(stmt)
     reviews_to_publish = res.scalars().all()
     
     published_count = 0
     for review in reviews_to_publish:
         try:
-            review.status = "published"
-            await db.commit()
-            await publish_review_to_production(review, db)
-            published_count += 1
+            ok = await publish_review_to_production(review, db)
+            if ok:
+                published_count += 1
         except Exception as e:
             logger.exception("Error publishing review", uuid=str(review.product_uuid), error=str(e))
             

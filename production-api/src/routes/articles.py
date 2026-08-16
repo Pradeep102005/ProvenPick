@@ -133,7 +133,7 @@ async def publish_article(
         db.add(l3)
         await db.flush()
 
-    # Check if Article already exists to overwrite (idempotency)
+    # Check if Article with this UUID already exists to update/overwrite
     stmt = select(Article).where(Article.article_uuid == payload.article_uuid)
     res = await db.execute(stmt)
     existing_article = res.scalars().first()
@@ -142,13 +142,25 @@ async def publish_article(
         await db.delete(existing_article)
         await db.flush()
 
-    # Create Article with direct category_name string
+    # Collision-proof Slug Generator: ensure unique slug for every article
+    base_slug = slugify(payload.slug or payload.title)
+    candidate_slug = base_slug
+    counter = 1
+    while True:
+        chk_stmt = select(Article).where(Article.slug == candidate_slug, Article.article_uuid != payload.article_uuid)
+        chk_res = await db.execute(chk_stmt)
+        if not chk_res.scalars().first():
+            break
+        candidate_slug = f"{base_slug}-{counter}"
+        counter += 1
+
+    # Create Article with direct category_name string and unique slug
     new_article = Article(
         article_uuid=payload.article_uuid,
         l3_category_id=l3.id if l3 else None,
         category_name=cat_str,
         title=payload.title,
-        slug=payload.slug,
+        slug=candidate_slug,
         introduction=payload.introduction or payload.title,
         full_article_html=payload.full_article_html,
         mindmap_image_url=payload.mindmap_image_url,
