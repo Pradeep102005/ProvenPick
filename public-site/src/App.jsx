@@ -59,7 +59,28 @@ function App() {
     }
   };
 
+  const handleCategorySelect = (cat) => {
+    setSelectedL1(cat);
+    setSelectedL2("All");
+    if (cat === "All") {
+      window.history.pushState({}, "", "/");
+    } else {
+      const slug = cat.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      window.history.pushState({}, "", `/${slug}`);
+    }
+    if (selectedArticle) handleBack();
+  };
+
   useEffect(() => {
+    const path = window.location.pathname.replace(/^\//, '').toLowerCase();
+    if (path) {
+      const matchedCat = L1_CATEGORIES_LIST.find(c => 
+        c.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') === path
+      );
+      if (matchedCat) {
+        setSelectedL1(matchedCat);
+      }
+    }
     fetchArticles();
     fetchCategories();
   }, []);
@@ -179,7 +200,7 @@ function App() {
                   paddingBottom: '4px',
                   borderBottom: selectedL1 === cat ? '2px solid #a3e635' : 'none'
                 }}
-                onClick={() => { setSelectedL1(cat); setSelectedL2("All"); if (selectedArticle) handleBack(); }}
+                onClick={() => handleCategorySelect(cat)}
               >
                 {cat}
               </span>
