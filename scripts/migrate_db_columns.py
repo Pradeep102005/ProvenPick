@@ -28,8 +28,10 @@ MIGRATION_SQLS = [
     "ALTER TABLE articles ADD COLUMN IF NOT EXISTS category_name VARCHAR(255);",
     "ALTER TABLE articles ADD COLUMN IF NOT EXISTS mindmap_image_url VARCHAR(1024);",
     "ALTER TABLE articles ADD COLUMN IF NOT EXISTS bullet_points JSONB DEFAULT '[]'::jsonb;",
-    "ALTER TABLE articles ADD COLUMN IF NOT EXISTS seo_title VARCHAR(70);",
-    "ALTER TABLE articles ADD COLUMN IF NOT EXISTS seo_description VARCHAR(160);",
+    "ALTER TABLE articles ADD COLUMN IF NOT EXISTS seo_title VARCHAR(512);",
+    "ALTER TABLE articles ALTER COLUMN seo_title TYPE VARCHAR(512);",
+    "ALTER TABLE articles ADD COLUMN IF NOT EXISTS seo_description TEXT;",
+    "ALTER TABLE articles ALTER COLUMN seo_description TYPE TEXT;",
     "ALTER TABLE articles ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0;",
     "ALTER TABLE articles ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT FALSE;",
     "ALTER TABLE articles ALTER COLUMN l3_category_id DROP NOT NULL;",
@@ -47,6 +49,9 @@ MIGRATION_SQLS = [
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS skip_if TEXT;",
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url VARCHAR(1024);",
     "ALTER TABLE products ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0;",
+
+    # article_sources
+    "ALTER TABLE article_sources ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"
 ]
 
 async def migrate():
