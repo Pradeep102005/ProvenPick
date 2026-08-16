@@ -9,14 +9,18 @@ WORKFLOW_DB = os.environ.get(
     "postgresql+asyncpg://provenpick:provenpick123@127.0.0.1:5432/provenpick_workflow"
 )
 
-# ── Monitored YouTube Tech & Product Channels (Verified Real Channel IDs) ──
+# ── Monitored YouTube Tech & Product Channels ──
 CHANNELS = [
-    # Electronics (Hindi, Telugu & Top Indian Tech Channels)
-    {"channel_id": "UCXsXitjiT_8qPgNEFGPVfBA", "channel_name": "Technical Guruji", "category": "Electronics"},
-    {"channel_id": "UCgJ5_1F6yJhYLnyMszUdmUg", "channel_name": "Trakin Tech", "category": "Electronics"},
-    {"channel_id": "UCBVDOqAOemETfc-MOn4fqgA", "channel_name": "Prasadtechintelugu", "category": "Electronics"},
-    {"channel_id": "UCqeXMnAG9VCSQcxLR-F2mKw", "channel_name": "Tech Burner", "category": "Electronics"},
-    {"channel_id": "UCS5cgC8B_dGDftYqE_TbneQ", "channel_name": "Geekyranjit", "category": "Electronics"},
+    # Electronics (Hindi & Telugu Top Tech Channels)
+    {"channel_id": "UCEPL07qzVsOcHd3sMUws65g", "channel_name": "Trakin Tech", "category": "Electronics"},
+    {"channel_id": "UCOhHO2ICt0ti9KAh-QHvttQ", "channel_name": "Technical Guruji", "category": "Electronics"},
+    {"channel_id": "UCS261lQDXjMvc8Jck-2CQEg", "channel_name": "Gyan Therapy", "category": "Electronics"},
+    {"channel_id": "UCXUJJNoP1QupwsYIWFXmsZg", "channel_name": "Tech Burner", "category": "Electronics"},
+    {"channel_id": "UCdiHpeH9fr4DMK_3wbUZapA", "channel_name": "Sharmaji Technical", "category": "Electronics"},
+    {"channel_id": "UCdoDYkupTElV62K7ttA_E4w", "channel_name": "TechBar", "category": "Electronics"},
+    {"channel_id": "UC8vlDm5xvbxOrCvdu9UNOiA", "channel_name": "Techno Ruhez", "category": "Electronics"},
+    {"channel_id": "UCb-xXZ7ltTvrh9C6DgB9H-Q", "channel_name": "Prasadtechintelugu", "category": "Electronics"},
+    {"channel_id": "UCBStUF8ywTtgCvkpYVvi1YQ", "channel_name": "Telugu TechTuts", "category": "Electronics"},
 
     # Computer Accessories
     {"channel_id": "UCosNW_a1tP89qZpP2N4Z8XA", "channel_name": "Hardware Canucks", "category": "Computer Accessories"},
@@ -51,7 +55,7 @@ async def main():
     print(f"Connecting to Workflow DB: {WORKFLOW_DB}")
     engine = create_async_engine(WORKFLOW_DB)
     async with engine.begin() as conn:
-        print("Seeding verified YouTube channels into channels table...")
+        print("Seeding updated Hindi & Telugu YouTube channels into channels table...")
         for ch in CHANNELS:
             await conn.execute(
                 text("""
@@ -66,7 +70,7 @@ async def main():
             print(f" - Seeded Channel: {ch['channel_name']} [{ch['category']}] -> {ch['channel_id']}")
             
     await engine.dispose()
-    print("\n✅ All verified YouTube channels registered in PostgreSQL workflow DB!")
+    print("\n✅ All Hindi & Telugu channels successfully registered in PostgreSQL workflow DB!")
 
 if __name__ == "__main__":
     asyncio.run(main())
