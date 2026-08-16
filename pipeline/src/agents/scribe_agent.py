@@ -171,16 +171,20 @@ async def get_or_create_transcript(video_id: str) -> str:
         res = await session.execute(stmt)
         cached = res.scalars().first()
         
-        if cached and len(cached.clean_transcript) > 100:
-            logger.info("Found transcript in cache database", video_id=video_id)
-            return cached.clean_transcript
-            
+        if cached:
+            transcript_content = getattr(cached, "clean_transcript", None) or getattr(cached, "raw_transcript", None)
+            if transcript_content and len(transcript_content) > 100:
+                logger.info("Found transcript in cache database", video_id=video_id)
+                return transcript_content
+
         lang, clean_text = await fetch_transcript_with_ytdlp(video_id)
-        
+
         tc = TranscriptCache(
             video_id=video_id,
+            original_language=lang,
             language=lang,
             clean_transcript=clean_text,
+            raw_transcript=clean_text,
             is_hindi=(lang == "hi")
         )
         session.add(tc)
@@ -311,21 +315,6 @@ async def run_scribe_agent(state: OrchestratorState) -> OrchestratorState:
         prompt = ChatPromptTemplate.from_template(WRITE_REVIEW_PROMPT)
         llm_pro = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash",
-            google_api_key=GEMINI_API_KEY,
-            temperature=0.2
-        )
-        chain = prompt | llm_pro
-        
-        res = await chain.ainvoke({
-            "rag_context": rag_context,
-            "editor_comments": comments
-        })
-        
-        raw_text = res.content.strip()
-        match = re.search(r'\{.*\}', raw_text, re.DOTALL)
-        if match:
-            clean_json_str = match.group()
-        else:
             clean_json_str = raw_text
             
         parsed_review = json.loads(clean_json_str)

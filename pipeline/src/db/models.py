@@ -24,10 +24,6 @@ class Base(DeclarativeBase):
 
 
 class Channel(Base):
-    """
-    A subscribed YouTube channel that the Scout Agent monitors daily.
-    Add channel IDs here to include them in the daily scan.
-    """
     __tablename__ = "channels"
 
     id              = Column(Integer, primary_key=True, autoincrement=True)
@@ -38,7 +34,6 @@ class Channel(Base):
     last_scanned_at = Column(DateTime(timezone=True))
     created_at      = Column(DateTime(timezone=True), default=utcnow)
 
-    # Relationships
     processed_videos = relationship("ProcessedVideo", back_populates="channel", cascade="all, delete-orphan")
 
     def __repr__(self):
@@ -46,11 +41,6 @@ class Channel(Base):
 
 
 class ProcessedVideo(Base):
-    """
-    Records every YouTube video the Scout Agent has seen.
-    Prevents re-processing the same video on future scans.
-    Both genuine reviews AND skipped videos are recorded here.
-    """
     __tablename__ = "processed_videos"
 
     id           = Column(Integer, primary_key=True, autoincrement=True)
@@ -71,15 +61,6 @@ class ProcessedVideo(Base):
 
 
 class PipelineJob(Base):
-    """
-    Tracks one full pipeline run for a single video.
-    Created when a video is confirmed as a genuine product review
-    and queued for the full multi-agent pipeline.
-
-    Status flow:
-        queued → transcribing → graphing → writing →
-        critiquing → enriching → submitted → approved/rejected → published
-    """
     __tablename__ = "pipeline_jobs"
 
     id            = Column(Integer, primary_key=True, autoincrement=True)
@@ -99,18 +80,17 @@ class PipelineJob(Base):
 
 
 class TranscriptCache(Base):
-    """
-    Caches fetched transcripts so yt-dlp doesn't re-fetch
-    the same video if the pipeline retries.
-    """
     __tablename__ = "transcript_cache"
 
     id                = Column(Integer, primary_key=True, autoincrement=True)
     video_id          = Column(String(64), unique=True, nullable=False)
-    original_language = Column(String(16))      # Detected: "en", "hi", "te", "ta", "ml"
-    raw_transcript    = Column(Text, nullable=False)
-    translated_text   = Column(Text)            # English translation (only if non-English)
+    original_language = Column(String(16))
+    language          = Column(String(16))
+    raw_transcript    = Column(Text, nullable=True)
+    clean_transcript  = Column(Text, nullable=True)
+    translated_text   = Column(Text)
+    is_hindi          = Column(Boolean, default=False)
     cached_at         = Column(DateTime(timezone=True), default=utcnow)
 
     def __repr__(self):
-        return f"<TranscriptCache {self.video_id} [{self.original_language}]>"
+        return f"<TranscriptCache {self.video_id} [{self.original_language or self.language}]>"
