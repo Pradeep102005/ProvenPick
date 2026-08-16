@@ -271,13 +271,13 @@ async def publish_review_to_production(review: StagingProductReview, db: AsyncSe
                 review.status = "published"
                 await db.commit()
                 logger.info("Successfully published review to production website!", product=review.name)
-                return True
+                return True, f"HTTP {res.status_code}"
             else:
                 logger.error("Failed to forward review to Production API", status_code=res.status_code, body=res.text)
-                return False
+                return False, f"HTTP {res.status_code}: {res.text[:200]}"
         except Exception as err:
             logger.error("HTTP error connecting to Production API", error=str(err))
-            return False
+            return False, f"Connection Error: {str(err)}"
 
 @router.patch("/{uuid}/approve", status_code=status.HTTP_200_OK)
 async def approve_review(
@@ -299,14 +299,14 @@ async def approve_review(
         
     review.reviewed_at = datetime.now(timezone.utc)
     
-    success = await publish_review_to_production(review, db)
-    if success:
+    ok, details = await publish_review_to_production(review, db)
+    if ok:
         review.status = "published"
     else:
         review.status = "pending"
     await db.commit()
 
-    return {"message": "Review publish request completed!", "status": review.status}
+    return {"message": "Review publish request completed!", "status": review.status, "details": details}
 
 @router.post("/publish-all-approved", status_code=status.HTTP_200_OK)
 async def publish_all_approved_reviews(db: AsyncSession = Depends(get_session)):
@@ -318,14 +318,14 @@ async def publish_all_approved_reviews(db: AsyncSession = Depends(get_session)):
     errors_list = []
     for review in reviews_to_publish:
         try:
-            ok = await publish_review_to_production(review, db)
+            ok, details = await publish_review_to_production(review, db)
             if ok:
                 published_count += 1
             else:
-                errors_list.append(f"Review '{review.name}' failed to publish to Production API")
+                errors_list.append(f"Review '{review.name}' failed: {details}")
         except Exception as e:
             logger.exception("Error publishing review", uuid=str(review.product_uuid), error=str(e))
-            errors_list.append(str(e))
+            errors_list.append(f"Review '{review.name}' error: {str(e)}")
             
     return {
         "message": f"Successfully published {published_count} out of {len(reviews_to_publish)} reviews to live site!",
