@@ -378,8 +378,8 @@ function App() {
           </div>
         </div>
 
-        {/* Tier 3: L2 Subcategory Bar (Dynamic when L1 selected) */}
-        {selectedL1 !== "All" && activeL2Subcategories.length > 0 && (
+        {/* Tier 3: L2 Subcategory Bar (Only shown on Category Listing pages, hidden on Article Detail page) */}
+        {!selectedArticle && selectedL1 !== "All" && activeL2Subcategories.length > 0 && (
           <div style={{ background: '#090a0f', borderTop: '1px solid #1e293b', padding: '12px 0' }}>
             <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 24px', display: 'flex', gap: '10px', overflowX: 'auto', alignItems: 'center' }}>
               <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 'bold', marginRight: '8px', whiteSpace: 'nowrap' }}>
