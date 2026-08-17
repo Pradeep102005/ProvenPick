@@ -166,6 +166,23 @@ function App() {
     }
   };
 
+  const handleDeleteReview = async () => {
+    if (!selectedReview) return;
+    if (!window.confirm(`Are you sure you want to permanently delete "${selectedReview.review_title}"?`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/${selectedReview.product_uuid}`, {
+        method: "DELETE"
+      });
+      if (!res.ok) throw new Error("Delete action failed on staging server.");
+      
+      triggerToast(`🗑️ Review draft "${selectedReview.review_title}" was permanently deleted.`);
+      setSelectedReview(null);
+      await fetchReviews();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
   const handleQueueCustomUrl = async (e) => {
     e.preventDefault();
     if (!customUrl.trim()) return;
@@ -316,6 +333,14 @@ function App() {
 
                 {selectedReview.status !== "published" && (
                   <>
+                    <button 
+                      className="action-btn"
+                      style={{ background: '#ef4444', color: '#ffffff', border: 'none', padding: '10px 18px', borderRadius: '10px', fontWeight: '600', cursor: 'pointer' }}
+                      onClick={handleDeleteReview}
+                    >
+                      🗑️ Delete Draft
+                    </button>
+
                     <button 
                       className="action-btn reject"
                       onClick={() => setShowRejectModal(true)}

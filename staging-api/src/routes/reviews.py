@@ -64,27 +64,19 @@ async def enqueue_custom_youtube_url(
     db: AsyncSession = Depends(get_session)
 ):
     url = payload.url.strip()
-    match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
-    if not match:
-        raise HTTPException(status_code=400, detail="Invalid YouTube Video URL format. Provide a valid YouTube watch link.")
+    video_id = None
+    if len(url) == 11 and re.match(r"^[0-9A-Za-z_-]{11}$", url):
+        video_id = url
+    else:
+        match = re.search(r"(?:v=|\/|embed\/|shorts\/)([0-9A-Za-z_-]{11})", url)
+        if match:
+            video_id = match.group(1)
+            
+    if not video_id:
+        raise HTTPException(status_code=400, detail="Invalid YouTube Video URL or Video ID format.")
     
-    video_id = match.group(1)
     job_uuid = uuid.uuid4()
     
-    try:
-        await db.execute(text("DELETE FROM processed_videos WHERE video_id = :vid"), {"vid": video_id})
-    except Exception:
-        pass
-
-    try:
-        await db.execute(
-            text("INSERT INTO pipeline_jobs (job_uuid, video_id, status, current_agent) VALUES (:j_uuid, :vid, 'queued', 'scout')"),
-            {"j_uuid": str(job_uuid), "vid": video_id}
-        )
-        await db.commit()
-    except Exception as e:
-        logger.warn("Pipeline job SQL insert notice", error=str(e))
-
     redis_url = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")
     if redis_async:
         try:
@@ -353,3 +345,20 @@ async def reject_review(
     await db.commit()
     
     return {"message": "Review rejected and returned to pipeline for rewrite.", "status": "rejected"}
+
+@router.delete("/{uuid}", status_code=status.HTTP_200_OK)
+async def delete_review(
+    uuid: UUID,
+    db: AsyncSession = Depends(get_session)
+):
+    stmt = select(StagingProductReview).where(StagingProductReview.product_uuid == uuid)
+    result = await db.execute(stmt)
+    review = result.scalars().first()
+    
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found.")
+        
+    await db.delete(review)
+    await db.commit()
+    
+    return {"message": "Review draft successfully deleted.", "status": "deleted"}
