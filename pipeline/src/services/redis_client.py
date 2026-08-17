@@ -20,14 +20,15 @@ class RedisClient:
         data_str = json.dumps(payload)
         return await self.client.rpush(queue_name, data_str)
 
-    async def pop_from_queue(self, queue_name: str, timeout: int = 0) -> Optional[Dict[str, Any]]:
+    async def pop_from_queue(self, queue_name: str, timeout: int = 5) -> Optional[Dict[str, Any]]:
         """
-        Pop a JSON payload from the left (head) of a Redis list using non-blocking lpop.
+        Pop a JSON payload from the Redis list using brpop.
         """
         try:
-            element = await self.client.lpop(queue_name)
-            if element:
-                return json.loads(element)
+            res = await self.client.brpop(queue_name, timeout=timeout)
+            if res:
+                _, val = res
+                return json.loads(val)
         except Exception:
             pass
         return None
