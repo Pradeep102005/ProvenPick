@@ -55,10 +55,13 @@ function App() {
       const res = await fetch("/api/categories");
       if (res.ok) {
         const data = await res.json();
-        setCategoriesTree(data);
+        setCategoriesTree(Array.isArray(data) ? data : []);
+      } else {
+        setCategoriesTree([]);
       }
     } catch (err) {
       console.error("Failed to load DB taxonomy", err);
+      setCategoriesTree([]);
     }
   };
 
@@ -68,9 +71,11 @@ function App() {
       const res = await fetch(API_BASE);
       if (!res.ok) throw new Error("Failed to load buying guides.");
       const data = await res.json();
-      setArticles(data);
+      setArticles(Array.isArray(data) ? data : []);
       setError(null);
     } catch (err) {
+      console.error("Error fetching articles:", err);
+      setArticles([]);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -171,15 +176,20 @@ function App() {
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
+  // Safe Arrays
+  const safeArticles = Array.isArray(articles) ? articles : [];
+  const safeCategoriesTree = Array.isArray(categoriesTree) ? categoriesTree : [];
+
   // Subcategories for current L1
-  const dbL1Obj = categoriesTree.find(c => c.name.toLowerCase() === selectedL1.toLowerCase());
-  const dbL2List = dbL1Obj ? dbL1Obj.l2_categories.map(x => x.name) : [];
+  const dbL1Obj = safeCategoriesTree.find(c => c && c.name && typeof c.name === 'string' && c.name.toLowerCase() === selectedL1.toLowerCase());
+  const dbL2List = dbL1Obj && Array.isArray(dbL1Obj.l2_categories) ? dbL1Obj.l2_categories.map(x => x && x.name ? String(x.name) : "").filter(Boolean) : [];
   const staticL2List = L2_TAXONOMY_MAP[selectedL1] || [];
-  const activeL2Subcategories = Array.from(new Set([...dbL2List, ...staticL2List]));
+  const activeL2Subcategories = Array.from(new Set([...dbL2List, ...staticL2List])).filter(Boolean);
 
   // Search Suggestions matching query
   const searchSuggestions = searchQuery.trim().length > 0 
-    ? articles.filter(a => {
+    ? safeArticles.filter(a => {
+        if (!a) return false;
         const q = searchQuery.toLowerCase();
         const t = (a.title || "").toLowerCase();
         const c = (a.category_name || "").toLowerCase();
@@ -189,7 +199,8 @@ function App() {
     : [];
 
   // Filtered articles based on Category selection
-  const filteredArticles = articles.filter(a => {
+  const filteredArticles = safeArticles.filter(a => {
+    if (!a) return false;
     const catName = (a.category_name || "").toLowerCase();
     const titleText = (a.title || "").toLowerCase();
     
@@ -207,18 +218,19 @@ function App() {
   });
 
   const bestCarouselItems = L1_CATEGORIES_LIST.filter(c => c !== "All").map(catName => {
-    const matched = articles.find(a => {
+    const matched = safeArticles.find(a => {
+      if (!a) return false;
       const cn = (a.category_name || "").toLowerCase();
       const tt = (a.title || "").toLowerCase();
       return cn.includes(catName.toLowerCase()) || tt.includes(catName.toLowerCase());
     });
     return {
       category: catName,
-      article: matched || articles[0]
+      article: matched || safeArticles[0]
     };
-  }).filter(item => item.article);
+  }).filter(item => item && item.article);
 
-  const currentBestItem = bestCarouselItems[bestIndex % (bestCarouselItems.length || 1)];
+  const currentBestItem = bestCarouselItems.length > 0 ? bestCarouselItems[bestIndex % bestCarouselItems.length] : null;
 
   return (
     <div className="site-wrapper" style={{ background: '#090a0f', color: '#f3f4f6', minHeight: '100vh', width: '100%' }}>
@@ -566,7 +578,7 @@ function App() {
           /* Homepage Category View */
           <div>
             {/* Featured Carousel Block */}
-            {selectedL1 === "All" && currentBestItem && (
+            {selectedL1 === "All" && currentBestItem && currentBestItem.article && (
               <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '24px', marginBottom: '48px' }}>
                 <div style={{ background: '#fef08a', color: '#111827', padding: '32px 24px', borderRadius: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   <div>
@@ -587,8 +599,8 @@ function App() {
                       {bestIndex + 1} of {bestCarouselItems.length} Categories
                     </span>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <button onClick={handlePrevBest} style={{ background: '#111827', color: '#fff', border: 'none', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', fontWeight: 'bold' }}>‹</button>
-                      <button onClick={handleNextBest} style={{ background: '#111827', color: '#fff', border: 'none', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', fontWeight: 'bold' }}>›</button>
+                      <button onClick={() => setBestIndex((prev) => (prev - 1 + bestCarouselItems.length) % bestCarouselItems.length)} style={{ background: '#111827', color: '#fff', border: 'none', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', fontWeight: 'bold' }}>‹</button>
+                      <button onClick={() => setBestIndex((prev) => (prev + 1) % bestCarouselItems.length)} style={{ background: '#111827', color: '#fff', border: 'none', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', fontWeight: 'bold' }}>›</button>
                     </div>
                   </div>
                 </div>
