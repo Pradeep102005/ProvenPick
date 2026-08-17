@@ -41,30 +41,47 @@ Response:
 
 async def classify_video(video_title: str) -> tuple[bool, str]:
     """
-    Uses Gemini 2.5 Flash to classify if a video is a strict product review based on title.
+    Classifies if a video is a product review based on title.
+    Uses smart keyword rules first to avoid hitting LLM rate limits.
     """
-    try:
-        prompt = ChatPromptTemplate.from_template(CLASSIFICATION_PROMPT)
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
-            google_api_key=GEMINI_API_KEY,
-            temperature=0.0
-        )
-        chain = prompt | llm
-        res = await chain.ainvoke({"title": video_title})
-        response_text = res.content.strip()
-        
-        if response_text.startswith("YES"):
-            return True, ""
-        else:
-            reason = response_text.replace("NO:", "").strip()
-            if not reason:
-                reason = "Skipped (general advice, news, or non-review)"
-            return False, reason
+    title_lower = video_title.lower()
+    
+    # 1. Immediate rejection rules for non-review vlogs/news
+    reject_keywords = ["scam", "case hogaya", "funny", "vlog", "rant", "moving on", "podcast", "live q&a", "news", "controversy"]
+    if any(rk in title_lower for rk in reject_keywords):
+        return False, "Skipped (non-review title keyword)"
+
+    # 2. Strong acceptance keywords for tech reviews
+    review_keywords = ["review", "unboxing", "hands-on", "vs", "test", "buying guide", "under 1000", "under 10000", "under 20000", "under 30000", "under 40000", "under 50000", "best", "phone", "gadget", "watch", "laptop", "camera", "tv", "shorts", "first look"]
+    if any(rk in title_lower for rk in review_keywords):
+        return True, ""
+
+    # 3. Fallback to Gemini LLM with retry backoff
+    for attempt in range(3):
+        try:
+            prompt = ChatPromptTemplate.from_template(CLASSIFICATION_PROMPT)
+            llm = ChatGoogleGenerativeAI(
+                model="gemini-2.5-flash",
+                google_api_key=GEMINI_API_KEY,
+                temperature=0.0
+            )
+            chain = prompt | llm
+            res = await chain.ainvoke({"title": video_title})
+            response_text = res.content.strip()
             
-    except Exception as e:
-        logger.error("Failed to classify video via LLM", title=video_title, error=str(e))
-        return False, "Classification Exception"
+            if response_text.startswith("YES"):
+                return True, ""
+            else:
+                reason = response_text.replace("NO:", "").strip() or "Skipped (non-review)"
+                return False, reason
+        except Exception as e:
+            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                logger.warn("Scout LLM 429 rate limit. Waiting 10s before retry...", attempt=attempt+1)
+                await asyncio.sleep(10)
+            else:
+                logger.error("Failed to classify video via LLM", title=video_title, error=str(e))
+                return True, ""  # Default allow review
+    return True, ""
 
 async def run_channel_scan():
     """

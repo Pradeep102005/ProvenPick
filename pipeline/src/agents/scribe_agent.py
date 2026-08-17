@@ -268,7 +268,7 @@ EDITORIAL CONTENT GUIDELINES (1,000+ Words Total):
    - Final price-to-performance ratio evaluation and definitive buying recommendation.
 
 JSON Output Format (Return ONLY pure JSON):
-{
+{{
   "category_name": "<Exact category string selected from list above>",
   "name": "Exact Product Name",
   "brand": "Brand Name",
@@ -279,50 +279,50 @@ JSON Output Format (Return ONLY pure JSON):
   "verdict": "Definitive purchase recommendation for buyers.",
   "rating": 4.60,
   "review_sections": [
-    {
+    {{
       "page_index": 1,
       "title": "Unboxing, Design Architecture & Build Quality",
       "content_html": "<p>Content with HTML formatting, <strong>bold highlights</strong>, and bullet lists...</p>"
-    },
-    {
+    }},
+    {{
       "page_index": 2,
       "title": "Display Excellence & Benchmark Performance",
       "content_html": "<p>Detailed testing insights and performance metrics...</p>"
-    },
-    {
+    }},
+    {{
       "page_index": 3,
       "title": "Battery Endurance & Daily Experience",
       "content_html": "<p>Battery testing, charging speeds, and UI smoothness...</p>"
-    },
-    {
+    }},
+    {{
       "page_index": 4,
       "title": "Target Persona: Who Should Buy & Who Should Skip",
       "content_html": "<p>Target persona breakdown and competitor comparison...</p>"
-    },
-    {
+    }},
+    {{
       "page_index": 5,
       "title": "Final ProvenPick Verdict & Value Rating",
       "content_html": "<p>Final buying score and price-to-performance verdict...</p>"
-    }
+    }}
   ],
-  "specs": {
+  "specs": {{
     "display": "6.7-inch AMOLED, 120Hz",
     "processor": "Snapdragon 8 Gen 3",
     "battery": "5000 mAh, 68W Charging",
     "main_camera": "50MP OIS Triple Camera",
     "os": "Android 14"
-  },
+  }},
   "pros": [
-    {"text": "Exceptional build quality and premium in-hand ergonomics", "weight": 5},
-    {"text": "Vivid 120Hz display with outstanding outdoor legibility", "weight": 5},
-    {"text": "All-day battery life with rapid fast charging support", "weight": 4},
-    {"text": "Clean software interface with prompt security patches", "weight": 4}
+    {{"text": "Exceptional build quality and premium in-hand ergonomics", "weight": 5}},
+    {{"text": "Vivid 120Hz display with outstanding outdoor legibility", "weight": 5}},
+    {{"text": "All-day battery life with rapid fast charging support", "weight": 4}},
+    {{"text": "Clean software interface with prompt security patches", "weight": 4}}
   ],
   "cons": [
-    {"text": "Slight thermal throttling under sustained gaming loads", "weight": 3},
-    {"text": "No microSD card slot for expandable storage", "weight": 3}
+    {{"text": "Slight thermal throttling under sustained gaming loads", "weight": 3}},
+    {{"text": "No microSD card slot for expandable storage", "weight": 3}}
   ]
-}
+}}
 """
 
 async def run_scribe_agent(state: OrchestratorState) -> OrchestratorState:
