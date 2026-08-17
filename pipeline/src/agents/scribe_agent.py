@@ -315,8 +315,37 @@ async def run_scribe_agent(state: OrchestratorState) -> OrchestratorState:
         prompt = ChatPromptTemplate.from_template(WRITE_REVIEW_PROMPT)
         llm_pro = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash",
+            google_api_key=GEMINI_API_KEY,
+            temperature=0.2
+        )
+        chain = prompt | llm_pro
+
+        res = None
+        for attempt in range(5):
+            try:
+                res = await chain.ainvoke({
+                    "transcript": transcript[:35000],
+                    "rag_context": rag_context,
+                    "editor_comments": comments
+                })
+                break
+            except Exception as llm_err:
+                if "429" in str(llm_err) or "RESOURCE_EXHAUSTED" in str(llm_err):
+                    logger.warn("Scribe Agent: Gemini API 429 rate limit hit. Waiting 15s before retry...", attempt=attempt+1)
+                    await asyncio.sleep(15)
+                else:
+                    raise llm_err
+
+        if not res:
+            raise RuntimeError("Gemini API rate limit persisted after 5 retries.")
+
+        raw_text = res.content.strip()
+        match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+        if match:
+            clean_json_str = match.group()
+        else:
             clean_json_str = raw_text
-            
+
         parsed_review = json.loads(clean_json_str)
         
         state["name"] = parsed_review.get("name", state["video_title"])
