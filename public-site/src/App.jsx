@@ -48,6 +48,49 @@ function App() {
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const searchRef = useRef(null);
 
+  const [showSubModal, setShowSubModal] = useState(false);
+  const [subName, setSubName] = useState("");
+  const [subEmail, setSubEmail] = useState("");
+  const [subIncludeL1, setSubIncludeL1] = useState(true);
+  const [subLoading, setSubLoading] = useState(false);
+  const [subMsg, setSubMsg] = useState(null);
+
+  const handleSubscribeSubmit = async (e) => {
+    e.preventDefault();
+    if (!subEmail.trim() || !subName.trim()) return;
+    setSubLoading(true);
+    setSubMsg(null);
+    try {
+      const catParts = (articleDetail?.category_name || "Electronics -> General Tech").split("->").map(s => s.trim());
+      const l1Val = catParts[0] || selectedL1;
+      const l2Val = catParts[1] || selectedL2;
+
+      const res = await fetch("/api/subscriptions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: subName.trim(),
+          email: subEmail.trim(),
+          l1_category: l1Val,
+          l2_category: l2Val
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Subscription failed.");
+      setSubMsg(data.message || "Subscribed successfully!");
+      setTimeout(() => {
+        setShowSubModal(false);
+        setSubMsg(null);
+        setSubName("");
+        setSubEmail("");
+      }, 2500);
+    } catch (err) {
+      setSubMsg(`⚠️ ${err.message}`);
+    } finally {
+      setSubLoading(false);
+    }
+  };
+
   const [bestIndex, setBestIndex] = useState(0);
 
   const fetchCategories = async () => {
@@ -442,13 +485,35 @@ function App() {
             ) : articleDetail ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '40px' }}>
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px' }}>
-                    <span style={{ color: '#a3e635', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                      {articleDetail.category_name}
-                    </span>
-                    <span style={{ background: '#f59e0b', color: '#111827', fontWeight: 'bold', padding: '4px 12px', borderRadius: '14px', fontSize: '13px', boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)' }}>
-                      ★ {Number(articleDetail.products?.[0]?.rating || articleDetail.rating || 4.6).toFixed(1)} / 5.0 ProvenPick Score
-                    </span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <span style={{ color: '#a3e635', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                        {articleDetail.category_name}
+                      </span>
+                      <span style={{ background: '#f59e0b', color: '#111827', fontWeight: 'bold', padding: '4px 12px', borderRadius: '14px', fontSize: '13px', boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)' }}>
+                        ★ {Number(articleDetail.products?.[0]?.rating || articleDetail.rating || 4.6).toFixed(1)} / 5.0 ProvenPick Score
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => setShowSubModal(true)}
+                      style={{
+                        background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                        color: '#fff',
+                        border: 'none',
+                        padding: '8px 16px',
+                        borderRadius: '20px',
+                        fontWeight: 'bold',
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      🔔 Subscribe to Category Alerts
+                    </button>
                   </div>
 
                   <h1 style={{ fontSize: '36px', color: '#fff', marginTop: '8px', marginBottom: '16px', lineHeight: '1.2' }}>
@@ -739,6 +804,108 @@ function App() {
           </div>
         )}
       </div>
+
+      {/* Subscription Modal Overlay */}
+      {showSubModal && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.8)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '24px'
+          }}
+        >
+          <div 
+            style={{
+              background: '#1e293b',
+              border: '1px solid #334155',
+              borderRadius: '20px',
+              maxWidth: '480px',
+              width: '100%',
+              padding: '32px',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6)',
+              position: 'relative'
+            }}
+          >
+            <button 
+              onClick={() => { setShowSubModal(false); setSubMsg(null); }}
+              style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', color: '#94a3b8', fontSize: '18px', cursor: 'pointer' }}
+            >
+              ✕
+            </button>
+
+            <div style={{ color: '#6366f1', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>
+              ⚡ KAFKA EVENT ALERTS
+            </div>
+            <h2 style={{ fontSize: '24px', color: '#fff', fontWeight: 'bold', marginBottom: '8px' }}>
+              Subscribe to {articleDetail?.category_name?.split('->')[1] || selectedL1} Reviews
+            </h2>
+            <p style={{ color: '#94a3b8', fontSize: '14px', lineHeight: '1.5', marginBottom: '24px' }}>
+              Get instant email notifications whenever a new review is published in <strong>{articleDetail?.category_name || selectedL1}</strong>!
+            </p>
+
+            {subMsg ? (
+              <div style={{ background: subMsg.startsWith('⚠️') ? 'rgba(239,68,68,0.1)' : 'rgba(52,211,153,0.1)', border: subMsg.startsWith('⚠️') ? '1px solid #ef4444' : '1px solid #34d399', color: subMsg.startsWith('⚠️') ? '#fca5a5' : '#34d399', padding: '16px', borderRadius: '12px', textAlign: 'center', fontWeight: 'bold', fontSize: '14px' }}>
+                {subMsg}
+              </div>
+            ) : (
+              <form onSubmit={handleSubscribeSubmit}>
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', color: '#cbd5e1', marginBottom: '6px', fontWeight: 'bold' }}>Your Full Name:</label>
+                  <input 
+                    type="text"
+                    placeholder="Pradeep Kumar"
+                    value={subName}
+                    onChange={(e) => setSubName(e.target.value)}
+                    required
+                    style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '12px 16px', borderRadius: '10px', fontSize: '14px', outline: 'none' }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', color: '#cbd5e1', marginBottom: '6px', fontWeight: 'bold' }}>Your Email Address:</label>
+                  <input 
+                    type="email"
+                    placeholder="pradeep@example.com"
+                    value={subEmail}
+                    onChange={(e) => setSubEmail(e.target.value)}
+                    required
+                    style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '12px 16px', borderRadius: '10px', fontSize: '14px', outline: 'none' }}
+                  />
+                </div>
+
+                <div style={{ background: '#0f172a', padding: '12px 16px', borderRadius: '10px', marginBottom: '24px', border: '1px solid #334155' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '13px', color: '#cbd5e1' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={subIncludeL1}
+                      onChange={(e) => setSubIncludeL1(e.target.checked)}
+                      style={{ accentColor: '#6366f1', width: '16px', height: '16px' }}
+                    />
+                    Also notify me for ALL reviews under {articleDetail?.category_name?.split('->')[0] || selectedL1}
+                  </label>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={subLoading}
+                  style={{ width: '100%', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', color: '#fff', border: 'none', padding: '14px', borderRadius: '10px', fontWeight: 'bold', fontSize: '15px', cursor: subLoading ? 'wait' : 'pointer' }}
+                >
+                  {subLoading ? 'Subscribing...' : '🔔 Activate Category Alerts'}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

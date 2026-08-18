@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional
 from decimal import Decimal
 from uuid import UUID
 from datetime import datetime, timezone
+import asyncio
 import re
 import traceback
 
@@ -15,6 +16,7 @@ from src.db.models import (
     L1Category, L2Category, L3Category,
     Article, Product, AffiliateLink, ArticleSource
 )
+from src.services.kafka_producer import produce_article_published_event
 
 router = APIRouter(prefix="/api/articles", tags=["articles"])
 
@@ -235,6 +237,22 @@ async def publish_article(
 
         await db.commit()
         invalidate_articles_cache()
+
+        # Trigger Kafka Event Publication
+        try:
+            l1_str = l1.name if l1 else "Electronics"
+            l2_str = l2.name if l2 else "General Tech"
+            asyncio.create_task(produce_article_published_event({
+                "article_uuid": target_article.article_uuid,
+                "title": target_article.title,
+                "slug": target_article.slug,
+                "category_name": target_article.category_name,
+                "l1_category": l1_str,
+                "l2_category": l2_str
+            }))
+        except Exception as k_err:
+            print("Kafka Event Dispatch Warning:", k_err)
+
         return {"status": "published", "article_id": target_article.id, "slug": target_article.slug}
     except Exception as exc:
         await db.rollback()

@@ -75,6 +75,19 @@ function App() {
   const [categoryName, setCategoryName] = useState(PRESET_CATEGORIES[0]);
   const [l3CategoryId, setL3CategoryId] = useState(1);
   const [rejectComments, setRejectComments] = useState("");
+  const [kafkaLogs, setKafkaLogs] = useState([]);
+
+  const fetchKafkaLogs = async () => {
+    try {
+      const res = await fetch("/api/subscriptions/logs");
+      if (res.ok) {
+        const data = await res.json();
+        setKafkaLogs(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch Kafka logs", err);
+    }
+  };
 
   const fetchReviews = async () => {
     setLoading(true);
@@ -108,6 +121,7 @@ function App() {
 
   useEffect(() => {
     fetchReviews();
+    fetchKafkaLogs();
   }, [filterStatus]);
 
   const selectReview = (review) => {
@@ -399,6 +413,13 @@ function App() {
               >
                 Sources
               </button>
+              <button 
+                className={`tab-btn ${activeTab === 'kafka' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('kafka'); fetchKafkaLogs(); }}
+                style={{ color: activeTab === 'kafka' ? '#a3e635' : '#818cf8', fontWeight: 'bold' }}
+              >
+                ⚡ Kafka Live Dispatches ({kafkaLogs.length})
+              </button>
             </div>
 
             <div className="detail-content">
@@ -492,6 +513,47 @@ function App() {
                       <span className="source-link-icon">🔗</span>
                     </a>
                   ))}
+                </div>
+              {activeTab === 'kafka' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: '12px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ color: '#818cf8', fontWeight: 'bold', fontSize: '13px' }}>
+                        ⚡ APACHE KAFKA TOPIC: provenpick-articles
+                      </div>
+                      <div style={{ color: '#9ca3af', fontSize: '12px', marginTop: '4px' }}>
+                        Consumer Microservice matches Category Subscribed emails upon 'article.published' events.
+                      </div>
+                    </div>
+                    <button onClick={fetchKafkaLogs} style={{ background: '#6366f1', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>
+                      🔄 Refresh Stream
+                    </button>
+                  </div>
+
+                  {kafkaLogs.length > 0 ? (
+                    kafkaLogs.map((log) => (
+                      <div key={log.id} className="source-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '6px', background: '#1e293b', padding: '16px', borderRadius: '10px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                          <span style={{ color: '#34d399', fontWeight: 'bold', fontSize: '13px' }}>
+                            📧 Sent to {log.subscriber_email}
+                          </span>
+                          <span style={{ color: '#9ca3af', fontSize: '11px' }}>
+                            {new Date(log.dispatched_at).toLocaleTimeString()}
+                          </span>
+                        </div>
+                        <div style={{ color: '#fff', fontSize: '14px', fontWeight: '600' }}>
+                          Article: {log.article_title}
+                        </div>
+                        <div style={{ color: '#818cf8', fontSize: '12px' }}>
+                          Matched Target Category: {log.l1_category} {log.l2_category ? `-> ${log.l2_category}` : ''}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ color: '#9ca3af', padding: '30px 0', textAlign: 'center' }}>
+                      📬 No email notifications dispatched yet. Subscribe to a category on provenpick.xyz, then approve & publish a review to see live Kafka Pub/Sub events in action!
+                    </div>
+                  )}
                 </div>
               )}
             </div>

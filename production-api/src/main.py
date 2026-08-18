@@ -8,15 +8,20 @@ load_dotenv(find_dotenv())
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+import asyncio
 from src.db.session import create_tables
 from src.routes.articles import router as articles_router
 from src.routes.categories import router as categories_router
+from src.routes.subscriptions import router as subscriptions_router
+from src.services.kafka_consumer import start_kafka_consumer_loop
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Auto-create tables in PostgreSQL production database
     print("Starting up ProvenPick Production API... Auto-creating database tables.")
     await create_tables()
+    # Launch Kafka Consumer Background Loop
+    asyncio.create_task(start_kafka_consumer_loop())
     yield
     # Shutdown: Clean up operations (if any)
     print("Shutting down ProvenPick Production API.")
@@ -40,6 +45,7 @@ app.add_middleware(
 # Include Routers
 app.include_router(articles_router)
 app.include_router(categories_router)
+app.include_router(subscriptions_router)
 
 @app.get("/health", tags=["health"])
 async def health_check():

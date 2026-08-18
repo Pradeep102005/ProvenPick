@@ -154,3 +154,35 @@ class ArticleSource(Base):
 
     def __repr__(self):
         return f"<ArticleSource {self.video_url}>"
+
+
+class CategorySubscriber(Base):
+    __tablename__ = "category_subscribers"
+
+    id           = Column(Integer, primary_key=True, autoincrement=True)
+    name         = Column(String(255), nullable=False)
+    email        = Column(String(255), nullable=False, index=True)
+    l1_category  = Column(String(255), nullable=False)
+    l2_category  = Column(String(255), nullable=True)
+    is_active    = Column(Boolean, default=True)
+    subscribed_at= Column(DateTime(timezone=True), default=utcnow)
+
+    def __repr__(self):
+        return f"<CategorySubscriber {self.email} ({self.l1_category} -> {self.l2_category})>"
+
+
+class EmailNotificationLog(Base):
+    __tablename__ = "email_notification_logs"
+
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    subscriber_email = Column(String(255), nullable=False)
+    article_title    = Column(String(512), nullable=False)
+    article_slug     = Column(String(512), nullable=False)
+    l1_category      = Column(String(255), nullable=False)
+    l2_category      = Column(String(255), nullable=True)
+    status           = Column(String(50), default="dispatched")
+    dispatched_at    = Column(DateTime(timezone=True), default=utcnow)
+
+    def __repr__(self):
+        return f"<EmailNotificationLog {self.subscriber_email} -> {self.article_title}>"
+
