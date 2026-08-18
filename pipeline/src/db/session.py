@@ -21,6 +21,13 @@ async def get_session() -> AsyncSession:
 
 
 async def create_tables():
-    """Create all tables on first run (idempotent)."""
+    """Create all tables and apply auto-migrations on first run (idempotent)."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        from sqlalchemy import text
+        try:
+            await conn.execute(text("ALTER TABLE transcript_cache ADD COLUMN IF NOT EXISTS language VARCHAR(16);"))
+            await conn.execute(text("ALTER TABLE transcript_cache ADD COLUMN IF NOT EXISTS original_language VARCHAR(16);"))
+            await conn.execute(text("ALTER TABLE transcript_cache ADD COLUMN IF NOT EXISTS is_hindi BOOLEAN DEFAULT FALSE;"))
+        except Exception as e:
+            print("Auto-migration notice:", e)
