@@ -463,15 +463,21 @@ function App() {
 
               {activeTab === 'affiliate' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {selectedReview.affiliate_links.map((link, idx) => (
-                    <div key={idx} className="source-item">
-                      <div>
-                        <div className="source-title">{link.platform?.toUpperCase()}</div>
-                        <div className="source-channel">{link.tracked_url}</div>
+                  {(selectedReview.affiliate_links && selectedReview.affiliate_links.length > 0) ? (
+                    selectedReview.affiliate_links.map((link, idx) => (
+                      <div key={idx} className="source-item">
+                        <div>
+                          <div className="source-title">{link.platform?.toUpperCase()}</div>
+                          <div className="source-channel">{link.tracked_url}</div>
+                        </div>
+                        <a href={link.tracked_url} target="_blank" rel="noreferrer" className="modal-btn cancel">Test Link</a>
                       </div>
-                      <a href={link.tracked_url} target="_blank" rel="noreferrer" className="modal-btn cancel">Test Link</a>
+                    ))
+                  ) : (
+                    <div style={{ color: '#9ca3af', padding: '20px 0', textAlign: 'center' }}>
+                      🔗 Affiliate links will be automatically injected with live Amazon (provenpick-21) and Flipkart tags upon publishing.
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
 

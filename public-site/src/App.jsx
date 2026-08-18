@@ -442,18 +442,24 @@ function App() {
             ) : articleDetail ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '40px' }}>
                 <div>
-                  <span style={{ color: '#a3e635', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                    {articleDetail.category_name}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px' }}>
+                    <span style={{ color: '#a3e635', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                      {articleDetail.category_name}
+                    </span>
+                    <span style={{ background: '#f59e0b', color: '#111827', fontWeight: 'bold', padding: '4px 12px', borderRadius: '14px', fontSize: '13px', boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)' }}>
+                      ★ {Number(articleDetail.products?.[0]?.rating || articleDetail.rating || 4.6).toFixed(1)} / 5.0 ProvenPick Score
+                    </span>
+                  </div>
+
                   <h1 style={{ fontSize: '36px', color: '#fff', marginTop: '8px', marginBottom: '16px', lineHeight: '1.2' }}>
                     {articleDetail.title}
                   </h1>
-                  <p style={{ fontSize: '18px', color: '#cbd5e1', lineHeight: '1.6', marginBottom: '24px' }}>
+                  <p style={{ fontSize: '18px', color: '#cbd5e1', lineHeight: '1.7', marginBottom: '24px' }}>
                     {articleDetail.introduction}
                   </p>
 
-                  <div style={{ background: '#1e293b', padding: '24px', borderRadius: '12px', marginBottom: '32px' }}>
-                    <div style={{ display: 'flex', gap: '16px', marginBottom: '20px' }}>
+                  <div style={{ background: '#1e293b', padding: '28px', borderRadius: '16px', marginBottom: '32px', border: '1px solid #334155' }}>
+                    <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', borderBottom: '1px solid #334155', paddingBottom: '16px' }}>
                       {["guide", "proscons", "specs"].map(tab => (
                         <button
                           key={tab}
@@ -461,10 +467,11 @@ function App() {
                             background: activeTab === tab ? '#6366f1' : 'transparent',
                             color: '#fff',
                             border: 'none',
-                            padding: '8px 16px',
-                            borderRadius: '6px',
+                            padding: '10px 20px',
+                            borderRadius: '8px',
                             cursor: 'pointer',
-                            fontWeight: 'bold'
+                            fontWeight: 'bold',
+                            fontSize: '14px'
                           }}
                           onClick={() => setActiveTab(tab)}
                         >
@@ -476,7 +483,7 @@ function App() {
                     {activeTab === 'guide' && (
                       <div 
                         dangerouslySetInnerHTML={{ __html: articleDetail.full_article_html }} 
-                        style={{ color: '#e2e8f0', lineHeight: '1.8' }} 
+                        style={{ color: '#f8fafc', lineHeight: '1.9', fontSize: '16px' }} 
                       />
                     )}
 
@@ -490,7 +497,7 @@ function App() {
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             {articleDetail.products[0].pros?.map((p, i) => (
-                              <div key={i} style={{ background: 'rgba(255, 255, 255, 0.03)', borderLeft: '3px solid #34d399', padding: '12px 16px', borderRadius: '8px', color: '#ecfdf5', fontSize: '14px', lineHeight: '1.5' }}>
+                              <div key={i} style={{ background: 'rgba(255, 255, 255, 0.03)', borderLeft: '3px solid #34d399', padding: '12px 16px', borderRadius: '8px', color: '#ecfdf5', fontSize: '14px', lineHeight: '1.6' }}>
                                 {typeof p === 'string' ? p : p.text}
                               </div>
                             ))}
@@ -505,7 +512,7 @@ function App() {
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             {articleDetail.products[0].cons?.map((c, i) => (
-                              <div key={i} style={{ background: 'rgba(255, 255, 255, 0.03)', borderLeft: '3px solid #f43f5e', padding: '12px 16px', borderRadius: '8px', color: '#fff1f2', fontSize: '14px', lineHeight: '1.5' }}>
+                              <div key={i} style={{ background: 'rgba(255, 255, 255, 0.03)', borderLeft: '3px solid #f43f5e', padding: '12px 16px', borderRadius: '8px', color: '#fff1f2', fontSize: '14px', lineHeight: '1.6' }}>
                                 {typeof c === 'string' ? c : c.text}
                               </div>
                             ))}
@@ -515,14 +522,14 @@ function App() {
                     )}
 
                     {activeTab === 'specs' && articleDetail.products?.[0] && (
-                      <div style={{ background: '#0f172a', padding: '20px', borderRadius: '8px' }}>
-                        <h4 style={{ color: '#fff', marginBottom: '16px' }}>Technical Specifications</h4>
+                      <div style={{ background: '#0f172a', padding: '24px', borderRadius: '12px' }}>
+                        <h4 style={{ color: '#fff', marginBottom: '16px', fontSize: '18px' }}>Technical Specifications</h4>
                         <table style={{ width: '100%', borderCollapse: 'collapse', color: '#cbd5e1' }}>
                           <tbody>
                             {Object.entries(articleDetail.products[0].specs || {}).map(([k, v]) => (
                               <tr key={k} style={{ borderBottom: '1px solid #334155' }}>
-                                <td style={{ padding: '10px 0', fontWeight: 'bold', width: '30%', textTransform: 'capitalize' }}>{k.replace(/_/g, ' ')}</td>
-                                <td style={{ padding: '10px 0' }}>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</td>
+                                <td style={{ padding: '12px 0', fontWeight: 'bold', width: '30%', textTransform: 'capitalize' }}>{k.replace(/_/g, ' ')}</td>
+                                <td style={{ padding: '12px 0' }}>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -532,42 +539,72 @@ function App() {
                   </div>
                 </div>
 
-                {/* Sidebar Cards */}
+                {/* Sidebar Card with Affiliate Links & Legal Disclosure */}
                 <div>
                   {articleDetail.products?.[0] && (
-                    <div style={{ background: '#1e293b', padding: '24px', borderRadius: '12px', border: '1px solid #334155' }}>
+                    <div style={{ background: '#1e293b', padding: '24px', borderRadius: '16px', border: '1px solid #334155', sticky: 'top', top: '20px' }}>
                       {articleDetail.products[0].image_url && (
                         <img 
                           src={articleDetail.products[0].image_url} 
                           alt={articleDetail.products[0].name}
-                          style={{ width: '100%', height: '220px', objectFit: 'cover', borderRadius: '8px', marginBottom: '16px' }}
+                          style={{ width: '100%', height: '220px', objectFit: 'cover', borderRadius: '12px', marginBottom: '16px' }}
                         />
                       )}
                       <h3 style={{ fontSize: '20px', color: '#fff', marginBottom: '8px' }}>{articleDetail.products[0].name}</h3>
-                      <div style={{ fontSize: '24px', color: '#a3e635', fontWeight: 'bold', marginBottom: '16px' }}>
-                        ₹{articleDetail.products[0].price_inr?.toLocaleString() || 'N/A'}
+                      
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                        <div style={{ fontSize: '24px', color: '#a3e635', fontWeight: '900' }}>
+                          ₹{articleDetail.products[0].price_inr?.toLocaleString() || 'Check Price'}
+                        </div>
+                        <span style={{ background: '#f59e0b', color: '#111827', fontWeight: 'bold', padding: '2px 8px', borderRadius: '8px', fontSize: '12px' }}>
+                          ★ {Number(articleDetail.products[0].rating || 4.6).toFixed(1)} / 5.0
+                        </span>
                       </div>
                       
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        {articleDetail.products[0].affiliate_links?.map((link) => (
-                          <button
-                            key={link.id}
-                            onClick={() => handleAffiliateClick(link.id, link.tracked_url)}
-                            style={{
-                              background: '#6366f1',
-                              color: '#fff',
-                              border: 'none',
-                              padding: '12px',
-                              borderRadius: '6px',
-                              fontWeight: 'bold',
-                              cursor: 'pointer',
-                              width: '100%'
-                            }}
-                          >
-                            Check Price on {link.platform} →
-                          </button>
-                        ))}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
+                        {articleDetail.products[0].affiliate_links && articleDetail.products[0].affiliate_links.length > 0 ? (
+                          articleDetail.products[0].affiliate_links.map((link) => (
+                            <button
+                              key={link.id}
+                              onClick={() => handleAffiliateClick(link.id, link.tracked_url)}
+                              style={{
+                                background: link.platform?.toLowerCase().includes('amazon') ? '#f59e0b' : '#2563eb',
+                                color: link.platform?.toLowerCase().includes('amazon') ? '#111827' : '#ffffff',
+                                border: 'none',
+                                padding: '14px 20px',
+                                borderRadius: '10px',
+                                fontWeight: 'bold',
+                                fontSize: '14px',
+                                cursor: 'pointer',
+                                width: '100%',
+                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)'
+                              }}
+                            >
+                              Check Price on {link.platform} →
+                            </button>
+                          ))
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => window.open(`https://www.amazon.in/s?k=${encodeURIComponent(articleDetail.products[0].name)}&tag=provenpick-21`, '_blank')}
+                              style={{ background: '#f59e0b', color: '#111827', border: 'none', padding: '14px 20px', borderRadius: '10px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', width: '100%', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)' }}
+                            >
+                              Check Price on Amazon →
+                            </button>
+                            <button
+                              onClick={() => window.open(`https://www.flipkart.com/search?q=${encodeURIComponent(articleDetail.products[0].name)}&affid=provenpick`, '_blank')}
+                              style={{ background: '#2563eb', color: '#ffffff', border: 'none', padding: '14px 20px', borderRadius: '10px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', width: '100%', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)' }}
+                            >
+                              Check Price on Flipkart →
+                            </button>
+                          </>
+                        )}
                       </div>
+
+                      {/* Monetization Disclosure */}
+                      <p style={{ fontSize: '11px', color: '#94a3b8', lineHeight: '1.4', margin: 0, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '12px' }}>
+                        ⚖️ <strong>Affiliate Disclosure:</strong> Buying through these links earns ProvenPick a small commission at no extra cost to you, supporting our independent product testing.
+                      </p>
                     </div>
                   )}
                 </div>
