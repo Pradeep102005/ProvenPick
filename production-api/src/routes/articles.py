@@ -234,6 +234,7 @@ async def publish_article(
             db.add(new_src)
 
         await db.commit()
+        invalidate_articles_cache()
         return {"status": "published", "article_id": target_article.id, "slug": target_article.slug}
     except Exception as exc:
         await db.rollback()
@@ -242,12 +243,22 @@ async def publish_article(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=err_msg)
 
+_ARTICLES_CACHE = {"data": None, "ts": 0}
+
+def invalidate_articles_cache():
+    _ARTICLES_CACHE["data"] = None
+    _ARTICLES_CACHE["ts"] = 0
+
 # ── Route: List Published Articles ──
 @router.get("")
 async def list_articles(
     category_slug: Optional[str] = None,
     db: AsyncSession = Depends(get_session)
 ):
+    now = datetime.now(timezone.utc).timestamp()
+    if not category_slug and _ARTICLES_CACHE["data"] and (now - _ARTICLES_CACHE["ts"] < 300):
+        return _ARTICLES_CACHE["data"]
+
     stmt = select(Article).where(Article.is_published == True).options(
         selectinload(Article.l3_category),
         selectinload(Article.products)
@@ -259,7 +270,7 @@ async def list_articles(
     res = await db.execute(stmt)
     articles = res.scalars().all()
     
-    return [
+    result = [
         {
             "id": art.id,
             "article_uuid": art.article_uuid,
@@ -283,6 +294,10 @@ async def list_articles(
         }
         for art in articles
     ]
+    if not category_slug:
+        _ARTICLES_CACHE["data"] = result
+        _ARTICLES_CACHE["ts"] = now
+    return result
 
 @router.patch("/{slug}/feature")
 async def toggle_article_feature(
