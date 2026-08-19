@@ -168,8 +168,7 @@ function App() {
         }
       }
     }
-    fetchArticles();
-    fetchCategories();
+    Promise.all([fetchArticles(), fetchCategories()]).catch(err => console.error("Parallel fetch notice:", err));
 
     const handleClickOutside = (e) => {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
@@ -375,6 +374,8 @@ function App() {
                     <img 
                       src={item.mindmap_image_url || item.products?.[0]?.image_url || 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=100'} 
                       alt={item.title} 
+                      loading="lazy"
+                      decoding="async"
                       style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '8px' }}
                     />
                     <div style={{ flex: 1 }}>
@@ -778,6 +779,8 @@ function App() {
                     <img 
                       src={article.mindmap_image_url || article.products?.[0]?.image_url || 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600'} 
                       alt={article.title}
+                      loading="lazy"
+                      decoding="async"
                       style={{ width: '100%', height: '200px', objectFit: 'cover' }}
                     />
                     <div style={{ padding: '20px' }}>
