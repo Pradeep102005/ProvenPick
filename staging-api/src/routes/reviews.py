@@ -255,7 +255,7 @@ async def publish_review_to_production(review: StagingProductReview, db: AsyncSe
         ]
     }
 
-    prod_api_url = os.environ.get("PRODUCTION_API_URL", "http://127.0.0.1:8002")
+    prod_api_url = os.environ.get("PRODUCTION_API_URL", "http://127.0.0.1:8000")
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             res = await client.post(f"{prod_api_url}/api/articles/publish", json=prod_payload)
