@@ -76,7 +76,7 @@ User=ubuntu
 WorkingDirectory=/var/www/ProvenPick/production-api
 Environment="PATH=/var/www/ProvenPick/.venv/bin"
 Environment="PYTHONPATH=/var/www/ProvenPick/production-api"
-ExecStart=/var/www/ProvenPick/.venv/bin/uvicorn src.main:app --host 127.0.0.1 --port 8000 --workers 4
+ExecStart=/var/www/ProvenPick/.venv/bin/uvicorn src.main:app --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=3s
 
@@ -94,7 +94,7 @@ User=ubuntu
 WorkingDirectory=/var/www/ProvenPick/staging-api
 Environment="PATH=/var/www/ProvenPick/.venv/bin"
 Environment="PYTHONPATH=/var/www/ProvenPick/staging-api"
-ExecStart=/var/www/ProvenPick/.venv/bin/uvicorn src.main:app --host 127.0.0.1 --port 8001 --workers 4
+ExecStart=/var/www/ProvenPick/.venv/bin/uvicorn src.main:app --host 127.0.0.1 --port 8001
 Restart=always
 RestartSec=3s
 
