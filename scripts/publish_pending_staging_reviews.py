@@ -142,6 +142,7 @@ async def publish_all_staging_reviews_to_production_db():
                     category_name=rev.category_name or "Electronics -> Smartphones",
                     mindmap_image_url=rev.image_urls[0] if (rev.image_urls and len(rev.image_urls) > 0) else "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600",
                     bullet_points=[rev.verdict] if rev.verdict else [],
+                    rating=float(rev.rating) if rev.rating else 4.5,
                     is_published=True,
                     published_at=datetime.now(timezone.utc)
                 )
@@ -154,6 +155,7 @@ async def publish_all_staging_reviews_to_production_db():
                     name=rev.name,
                     brand=rev.brand or "Brand",
                     price_inr=float(rev.price_inr) if rev.price_inr else 19999.0,
+                    rating=float(rev.rating) if rev.rating else 4.5,
                     pick_label="Editor's Choice",
                     pick_type="top_pick",
                     pros=[{"text": p if isinstance(p, str) else p.get("text", "")} for p in (rev.pros or [])],

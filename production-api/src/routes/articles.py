@@ -42,6 +42,7 @@ class ProductCreate(BaseModel):
     skip_if: Optional[str] = None
     image_url: Optional[str] = None
     display_order: int = 0
+    rating: Optional[float] = 4.5
     affiliate_links: List[ProductAffiliateCreate] = []
 
 class ArticleSourceCreate(BaseModel):
@@ -62,6 +63,7 @@ class ArticlePublishPayload(BaseModel):
     category_name: str
     l3_category_id: Optional[int] = 1
     is_featured: Optional[bool] = False
+    rating: Optional[float] = 4.5
     products: List[ProductCreate]
     sources: List[ArticleSourceCreate] = []
 
@@ -304,6 +306,7 @@ async def list_articles(
                     "name": p.name,
                     "brand": p.brand,
                     "price_inr": float(p.price_inr) if p.price_inr else None,
+                    "rating": float(p.rating) if getattr(p, "rating", None) else (float(art.rating) if getattr(art, "rating", None) else 4.5),
                     "image_url": p.image_url,
                     "image_urls": [p.image_url] if p.image_url else []
                 }
@@ -365,6 +368,7 @@ async def get_article(
         "bullet_points": art.bullet_points,
         "published_at": art.published_at,
         "view_count": art.view_count,
+        "rating": float(art.rating) if getattr(art, "rating", None) else 4.5,
         "category": {
             "id": art.l3_category.id if art.l3_category else 1,
             "name": cat_name,
@@ -376,6 +380,7 @@ async def get_article(
                 "name": p.name,
                 "brand": p.brand,
                 "price_inr": float(p.price_inr) if p.price_inr else None,
+                "rating": float(p.rating) if getattr(p, "rating", None) else (float(art.rating) if getattr(art, "rating", None) else 4.5),
                 "pick_label": p.pick_label,
                 "pick_type": p.pick_type,
                 "pros": p.pros,

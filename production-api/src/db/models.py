@@ -87,6 +87,7 @@ class Article(Base):
     updated_at        = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
     view_count        = Column(Integer, default=0)
     is_featured       = Column(Boolean, default=False)
+    rating            = Column(Numeric(3, 1), default=4.5)
 
     l3_category = relationship("L3Category", back_populates="articles")
     products    = relationship("Product", back_populates="article", cascade="all, delete-orphan")
@@ -104,6 +105,7 @@ class Product(Base):
     name           = Column(String(512), nullable=False)
     brand          = Column(String(255))
     price_inr      = Column(Numeric(10, 2))
+    rating         = Column(Numeric(3, 1), default=4.5)
     pick_label     = Column(String(100))
     pick_type      = Column(String(50))
     target_persona = Column(String(255))
