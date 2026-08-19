@@ -2,15 +2,86 @@ import asyncio
 import os
 import uuid
 from datetime import datetime, timezone
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, Numeric, JSON, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
-# Import models from staging DB and production DB
+# Import models from staging DB
 from src.db.session import AsyncSessionFactory as StagingSessionFactory, create_tables as create_staging_tables
 from src.db.models import StagingProductReview
 
-# Connect directly to production PostgreSQL DB (provenpick_production)
+# Define Production DB Models explicitly to prevent sys.modules collisions
+ProdBase = declarative_base()
+
+def utcnow():
+    return datetime.now(timezone.utc)
+
+class Article(ProdBase):
+    __tablename__ = "articles"
+
+    id                = Column(Integer, primary_key=True, autoincrement=True)
+    article_uuid      = Column(PG_UUID(as_uuid=True), unique=True, nullable=False)
+    l3_category_id    = Column(Integer, nullable=True)
+    category_name     = Column(String(255))
+    title             = Column(String(512), nullable=False)
+    slug              = Column(String(512), unique=True, nullable=False)
+    introduction      = Column(Text)
+    full_article_html = Column(Text, nullable=False)
+    mindmap_image_url = Column(String(1024))
+    bullet_points     = Column(JSON, default=list)
+    seo_title         = Column(String(512))
+    seo_description   = Column(Text)
+    is_published      = Column(Boolean, default=True)
+    published_at      = Column(DateTime(timezone=True), default=utcnow)
+    updated_at        = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    view_count        = Column(Integer, default=0)
+    is_featured       = Column(Boolean, default=False)
+
+    products = relationship("Product", back_populates="article", cascade="all, delete-orphan")
+
+
+class Product(ProdBase):
+    __tablename__ = "products"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    article_id     = Column(Integer, ForeignKey("articles.id"), nullable=False)
+    name           = Column(String(512), nullable=False)
+    brand          = Column(String(255))
+    price_inr      = Column(Numeric(10, 2))
+    pick_label     = Column(String(100))
+    pick_type      = Column(String(50))
+    target_persona = Column(String(255))
+    pros           = Column(JSON, default=list)
+    cons           = Column(JSON, default=list)
+    specs          = Column(JSON, default=dict)
+    best_for       = Column(Text)
+    skip_if        = Column(Text)
+    image_url      = Column(String(1024))
+    display_order  = Column(Integer, default=0)
+
+    article         = relationship("Article", back_populates="products")
+    affiliate_links = relationship("AffiliateLink", back_populates="product", cascade="all, delete-orphan")
+
+
+class AffiliateLink(ProdBase):
+    __tablename__ = "affiliate_links"
+
+    id            = Column(Integer, primary_key=True, autoincrement=True)
+    product_id    = Column(Integer, ForeignKey("products.id"), nullable=False)
+    platform      = Column(String(50), nullable=False)
+    raw_url       = Column(Text, nullable=False)
+    tracked_url   = Column(Text, nullable=False)
+    affiliate_tag = Column(String(100))
+    click_count   = Column(Integer, default=0)
+    created_at    = Column(DateTime(timezone=True), default=utcnow)
+
+    product = relationship("Product", back_populates="affiliate_links")
+
+
+# Production DB Connection
 PROD_DB_URL = os.environ.get(
     "PRODUCTION_DATABASE_URL",
     "postgresql+asyncpg://provenpick:provenpick123@127.0.0.1:5432/provenpick_production"
@@ -19,14 +90,12 @@ PROD_DB_URL = os.environ.get(
 prod_engine = create_async_engine(PROD_DB_URL, echo=False)
 ProdSessionFactory = async_sessionmaker(prod_engine, expire_on_commit=False, class_=AsyncSession)
 
+async def create_prod_tables():
+    async with prod_engine.begin() as conn:
+        await conn.run_sync(ProdBase.metadata.create_all)
+
 async def publish_all_staging_reviews_to_production_db():
     await create_staging_tables()
-
-    # Import production models dynamically
-    import sys
-    sys.path.append("/var/www/ProvenPick/production-api")
-    from src.db.models import Base as ProdBase, Article, Product, AffiliateLink, ArticleSource, create_tables as create_prod_tables
-
     await create_prod_tables()
 
     async with StagingSessionFactory() as staging_session, ProdSessionFactory() as prod_session:
