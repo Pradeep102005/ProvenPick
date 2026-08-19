@@ -26,6 +26,9 @@ async def create_tables():
         await conn.run_sync(Base.metadata.create_all)
         from sqlalchemy import text
         try:
+            await conn.execute(text("ALTER TABLE transcript_cache ADD COLUMN IF NOT EXISTS raw_transcript TEXT;"))
+            await conn.execute(text("ALTER TABLE transcript_cache ADD COLUMN IF NOT EXISTS clean_transcript TEXT;"))
+            await conn.execute(text("ALTER TABLE transcript_cache ADD COLUMN IF NOT EXISTS translated_text TEXT;"))
             await conn.execute(text("ALTER TABLE transcript_cache ADD COLUMN IF NOT EXISTS language VARCHAR(16);"))
             await conn.execute(text("ALTER TABLE transcript_cache ADD COLUMN IF NOT EXISTS original_language VARCHAR(16);"))
             await conn.execute(text("ALTER TABLE transcript_cache ADD COLUMN IF NOT EXISTS is_hindi BOOLEAN DEFAULT FALSE;"))
