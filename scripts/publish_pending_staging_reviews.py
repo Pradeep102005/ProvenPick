@@ -3,12 +3,13 @@ import os
 import httpx
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from src.db.session import AsyncSessionFactory
+from src.db.session import AsyncSessionFactory, create_tables
 from src.db.models import StagingProductReview
 
 PROD_API_URL = "http://127.0.0.1:8000"
 
 async def publish_all_pending_staging_reviews():
+    await create_tables()
     async with AsyncSessionFactory() as session:
         stmt = select(StagingProductReview).options(selectinload(StagingProductReview.sources))
         res = await session.execute(stmt)

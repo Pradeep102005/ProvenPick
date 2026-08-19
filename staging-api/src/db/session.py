@@ -4,7 +4,7 @@ from .models import Base
 
 db_url = os.environ.get(
     "STAGING_DATABASE_URL",
-    "postgresql+asyncpg://provenpick:provenpick123@127.0.0.1:5432/provenpick_workflow"
+    "postgresql+asyncpg://provenpick:provenpick123@127.0.0.1:5432/provenpick_staging"
 )
 
 engine = create_async_engine(db_url, echo=False)
