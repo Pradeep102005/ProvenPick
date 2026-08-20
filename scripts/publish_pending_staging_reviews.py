@@ -91,9 +91,16 @@ PROD_DB_URL = os.environ.get(
 prod_engine = create_async_engine(PROD_DB_URL, echo=False)
 ProdSessionFactory = async_sessionmaker(prod_engine, expire_on_commit=False, class_=AsyncSession)
 
+from sqlalchemy import text
+
 async def create_prod_tables():
     async with prod_engine.begin() as conn:
         await conn.run_sync(ProdBase.metadata.create_all)
+        try:
+            await conn.execute(text("ALTER TABLE articles ADD COLUMN IF NOT EXISTS rating NUMERIC(3, 1) DEFAULT 4.5;"))
+            await conn.execute(text("ALTER TABLE products ADD COLUMN IF NOT EXISTS rating NUMERIC(3, 1) DEFAULT 4.5;"))
+        except Exception as err:
+            print("Production DB migration notice:", err)
 
 async def publish_all_staging_reviews_to_production_db():
     await create_staging_tables()
