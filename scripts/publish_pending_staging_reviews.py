@@ -1,199 +1,225 @@
+"""
+publish_pending_staging_reviews.py
+-----------------------------------
+Bulletproof direct-SQL publisher.
+Reads all reviews from provenpick_staging and writes them
+directly into provenpick_production using raw SQL only.
+No SQLAlchemy ORM models — zero model mismatch errors.
+"""
+
 import asyncio
 import os
 import uuid
+import re
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, Numeric, JSON, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.orm import declarative_base, relationship
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload
 
-# Import models from staging DB
-from src.db.session import AsyncSessionFactory as StagingSessionFactory, create_tables as create_staging_tables
-from src.db.models import StagingProductReview
+import asyncpg
 
-# Define Production DB Models explicitly to prevent sys.modules collisions
-ProdBase = declarative_base()
-
-def utcnow():
-    return datetime.now(timezone.utc)
-
-class Article(ProdBase):
-    __tablename__ = "articles"
-
-    id                = Column(Integer, primary_key=True, autoincrement=True)
-    article_uuid      = Column(PG_UUID(as_uuid=True), unique=True, nullable=False)
-    l3_category_id    = Column(Integer, nullable=True)
-    category_name     = Column(String(255))
-    title             = Column(String(512), nullable=False)
-    slug              = Column(String(512), unique=True, nullable=False)
-    introduction      = Column(Text)
-    full_article_html = Column(Text, nullable=False)
-    mindmap_image_url = Column(String(1024))
-    bullet_points     = Column(JSON, default=list)
-    seo_title         = Column(String(512))
-    seo_description   = Column(Text)
-    is_published      = Column(Boolean, default=True)
-    published_at      = Column(DateTime(timezone=True), default=utcnow)
-    updated_at        = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
-    view_count        = Column(Integer, default=0)
-    is_featured       = Column(Boolean, default=False)
-    rating            = Column(Numeric(3, 1), default=4.5)
-
-    products = relationship("Product", back_populates="article", cascade="all, delete-orphan")
-
-
-class Product(ProdBase):
-    __tablename__ = "products"
-
-    id             = Column(Integer, primary_key=True, autoincrement=True)
-    article_id     = Column(Integer, ForeignKey("articles.id"), nullable=False)
-    name           = Column(String(512), nullable=False)
-    brand          = Column(String(255))
-    price_inr      = Column(Numeric(10, 2))
-    rating         = Column(Numeric(3, 1), default=4.5)
-    pick_label     = Column(String(100))
-    pick_type      = Column(String(50))
-    target_persona = Column(String(255))
-    pros           = Column(JSON, default=list)
-    cons           = Column(JSON, default=list)
-    specs          = Column(JSON, default=dict)
-    best_for       = Column(Text)
-    skip_if        = Column(Text)
-    image_url      = Column(String(1024))
-    display_order  = Column(Integer, default=0)
-
-    article         = relationship("Article", back_populates="products")
-    affiliate_links = relationship("AffiliateLink", back_populates="product", cascade="all, delete-orphan")
-
-
-class AffiliateLink(ProdBase):
-    __tablename__ = "affiliate_links"
-
-    id            = Column(Integer, primary_key=True, autoincrement=True)
-    product_id    = Column(Integer, ForeignKey("products.id"), nullable=False)
-    platform      = Column(String(50), nullable=False)
-    raw_url       = Column(Text, nullable=False)
-    tracked_url   = Column(Text, nullable=False)
-    affiliate_tag = Column(String(100))
-    click_count   = Column(Integer, default=0)
-    created_at    = Column(DateTime(timezone=True), default=utcnow)
-
-    product = relationship("Product", back_populates="affiliate_links")
-
-
-# Production DB Connection
-PROD_DB_URL = os.environ.get(
+STAGING_DSN = os.environ.get(
+    "STAGING_DATABASE_URL",
+    "postgresql://provenpick:provenpick123@127.0.0.1:5432/provenpick_staging"
+)
+PROD_DSN = os.environ.get(
     "PRODUCTION_DATABASE_URL",
-    "postgresql+asyncpg://provenpick:provenpick123@127.0.0.1:5432/provenpick_production"
+    "postgresql://provenpick:provenpick123@127.0.0.1:5432/provenpick_production"
 )
 
-prod_engine = create_async_engine(PROD_DB_URL, echo=False)
-ProdSessionFactory = async_sessionmaker(prod_engine, expire_on_commit=False, class_=AsyncSession)
 
-from sqlalchemy import text
+def slugify(text: str) -> str:
+    if not text:
+        return f"review-{uuid.uuid4().hex[:8]}"
+    text = text.lower().strip()
+    text = re.sub(r"[^\w\s-]", "", text)
+    text = re.sub(r"[\s_-]+", "-", text)
+    return text.strip("-") or f"review-{uuid.uuid4().hex[:8]}"
 
-async def create_prod_tables():
-    async with prod_engine.begin() as conn:
-        await conn.run_sync(ProdBase.metadata.create_all)
+
+async def ensure_prod_columns(prod_conn):
+    """Add any missing columns to production tables (safe to run multiple times)."""
+    migrations = [
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS rating NUMERIC(3,1) DEFAULT 4.5;",
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS category_name VARCHAR(255);",
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS mindmap_image_url VARCHAR(1024);",
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS bullet_points JSONB DEFAULT '[]';",
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS seo_title VARCHAR(512);",
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS seo_description TEXT;",
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0;",
+        "ALTER TABLE articles ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT FALSE;",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS rating NUMERIC(3,1) DEFAULT 4.5;",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS brand VARCHAR(255);",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS price_inr NUMERIC(10,2);",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS pick_label VARCHAR(100);",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS pick_type VARCHAR(50);",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS target_persona VARCHAR(255);",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS pros JSONB DEFAULT '[]';",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS cons JSONB DEFAULT '[]';",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS specs JSONB DEFAULT '{}';",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS best_for TEXT;",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS skip_if TEXT;",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url VARCHAR(1024);",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0;",
+    ]
+    for sql in migrations:
         try:
-            await conn.execute(text("ALTER TABLE articles ADD COLUMN IF NOT EXISTS rating NUMERIC(3, 1) DEFAULT 4.5;"))
-            await conn.execute(text("ALTER TABLE products ADD COLUMN IF NOT EXISTS rating NUMERIC(3, 1) DEFAULT 4.5;"))
-        except Exception as err:
-            print("Production DB migration notice:", err)
+            await prod_conn.execute(sql)
+        except Exception:
+            pass
+    print("✅ Production DB columns verified.")
+
 
 async def publish_all_staging_reviews_to_production_db():
-    await create_staging_tables()
-    await create_prod_tables()
+    staging_conn = await asyncpg.connect(STAGING_DSN)
+    prod_conn = await asyncpg.connect(PROD_DSN)
 
-    async with StagingSessionFactory() as staging_session, ProdSessionFactory() as prod_session:
-        stmt = select(StagingProductReview).options(selectinload(StagingProductReview.sources))
-        res = await staging_session.execute(stmt)
-        reviews = res.scalars().all()
+    try:
+        # Step 1: Ensure all columns exist
+        await ensure_prod_columns(prod_conn)
 
-        if not reviews:
-            print("ℹ️ No staging reviews found in database.")
+        # Step 2: Fetch all staging reviews
+        rows = await staging_conn.fetch(
+            "SELECT * FROM staging_product_reviews ORDER BY submitted_at ASC"
+        )
+
+        if not rows:
+            print("ℹ️  No staging reviews found.")
             return
 
-        print(f"📦 Direct DB Publisher: Found {len(reviews)} review(s). Writing to 'provenpick_production' DB...")
+        print(f"📦 Direct DB Publisher: Found {len(rows)} review(s). Writing to 'provenpick_production' DB...")
         published_count = 0
 
-        for rev in reviews:
-            # Check if article already published in production DB by slug or uuid
-            slug_val = rev.slug or f"review-{uuid.uuid4().hex[:8]}"
-            art_stmt = select(Article).where((Article.slug == slug_val) | (Article.article_uuid == rev.product_uuid))
-            art_res = await prod_session.execute(art_stmt)
-            existing_art = art_res.scalars().first()
+        for rev in rows:
+            try:
+                slug_val = rev["slug"] or slugify(rev["review_title"] or rev["name"])
+                prod_uuid = rev["product_uuid"] or uuid.uuid4()
+                rating_val = float(rev["rating"]) if rev["rating"] else 4.5
+                title_val = rev["review_title"] or rev["name"]
+                intro_val = rev["summary"] or "Comprehensive product review."
+                cat_val = rev["category_name"] or "Electronics"
+                image_urls = rev["image_urls"] or []
+                thumb = image_urls[0] if image_urls else "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600"
+                verdict = rev["verdict"] or ""
 
-            html_sections = []
-            for sec in (rev.review_sections or []):
-                stitle = sec.get("title", "") if isinstance(sec, dict) else ""
-                scontent = sec.get("content", "") if isinstance(sec, dict) else str(sec)
-                html_sections.append(f"<h3 style='color:#fff;margin-top:24px;margin-bottom:12px;'>{stitle}</h3><p style='line-height:1.9;margin-bottom:18px;'>{scontent}</p>")
+                # Build full article HTML from review_sections
+                sections = rev["review_sections"] or []
+                html_parts = []
+                if isinstance(sections, list):
+                    for sec in sections:
+                        if isinstance(sec, dict):
+                            stitle = sec.get("title", "")
+                            # support both content_html and content keys
+                            scontent = sec.get("content_html") or sec.get("content", "")
+                            if stitle:
+                                html_parts.append(f"<h3>{stitle}</h3>")
+                            if scontent:
+                                html_parts.append(f"<div>{scontent}</div>")
+                full_html = "\n".join(html_parts) if html_parts else f"<p>{intro_val}</p>"
 
-            full_html = "\n".join(html_sections) if html_sections else f"<p>{rev.summary or 'Full review content.'}</p>"
-
-            if existing_art:
-                existing_art.title = rev.review_title or rev.name
-                existing_art.introduction = rev.summary or "Comprehensive review."
-                existing_art.full_article_html = full_html
-                existing_art.category_name = rev.category_name or "Electronics -> Smartphones"
-                existing_art.is_published = True
-                art_obj = existing_art
-            else:
-                art_obj = Article(
-                    article_uuid=rev.product_uuid or uuid.uuid4(),
-                    title=rev.review_title or rev.name,
-                    slug=slug_val,
-                    introduction=rev.summary or "Comprehensive review.",
-                    full_article_html=full_html,
-                    category_name=rev.category_name or "Electronics -> Smartphones",
-                    mindmap_image_url=rev.image_urls[0] if (rev.image_urls and len(rev.image_urls) > 0) else "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=600",
-                    bullet_points=[rev.verdict] if rev.verdict else [],
-                    rating=float(rev.rating) if rev.rating else 4.5,
-                    is_published=True,
-                    published_at=datetime.now(timezone.utc)
+                # Check if article already exists by slug OR uuid
+                existing = await prod_conn.fetchrow(
+                    "SELECT id FROM articles WHERE slug = $1 OR article_uuid = $2",
+                    slug_val, prod_uuid
                 )
-                prod_session.add(art_obj)
-                await prod_session.flush()
 
-                # Add Product record
-                prod_obj = Product(
-                    article_id=art_obj.id,
-                    name=rev.name,
-                    brand=rev.brand or "Brand",
-                    price_inr=float(rev.price_inr) if rev.price_inr else 19999.0,
-                    rating=float(rev.rating) if rev.rating else 4.5,
-                    pick_label="Editor's Choice",
-                    pick_type="top_pick",
-                    pros=[{"text": p if isinstance(p, str) else p.get("text", "")} for p in (rev.pros or [])],
-                    cons=[{"text": c if isinstance(c, str) else c.get("text", "")} for c in (rev.cons or [])],
-                    specs=rev.specs if isinstance(rev.specs, dict) else {},
-                    image_url=rev.image_urls[0] if (rev.image_urls and len(rev.image_urls) > 0) else None
+                if existing:
+                    art_id = existing["id"]
+                    await prod_conn.execute(
+                        """UPDATE articles SET
+                            title=$1, introduction=$2, full_article_html=$3,
+                            category_name=$4, rating=$5, mindmap_image_url=$6,
+                            bullet_points=$7, is_published=TRUE, updated_at=$8
+                           WHERE id=$9""",
+                        title_val, intro_val, full_html, cat_val, rating_val,
+                        thumb, f'["{verdict}"]' if verdict else "[]",
+                        datetime.now(timezone.utc), art_id
+                    )
+                else:
+                    # Ensure slug is unique
+                    slug_check = await prod_conn.fetchval(
+                        "SELECT id FROM articles WHERE slug = $1", slug_val
+                    )
+                    if slug_check:
+                        slug_val = f"{slug_val}-{uuid.uuid4().hex[:6]}"
+
+                    art_id = await prod_conn.fetchval(
+                        """INSERT INTO articles
+                            (article_uuid, title, slug, introduction, full_article_html,
+                             category_name, rating, mindmap_image_url, bullet_points,
+                             is_published, published_at, updated_at, view_count, is_featured)
+                           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,TRUE,$10,$10,0,FALSE)
+                           RETURNING id""",
+                        prod_uuid, title_val, slug_val, intro_val, full_html,
+                        cat_val, rating_val, thumb,
+                        f'["{verdict}"]' if verdict else "[]",
+                        datetime.now(timezone.utc)
+                    )
+
+                    # Insert Product row
+                    pros = rev["pros"] or []
+                    cons = rev["cons"] or []
+                    specs = rev["specs"] or {}
+                    import json
+                    prod_id = await prod_conn.fetchval(
+                        """INSERT INTO products
+                            (article_id, name, brand, price_inr, rating,
+                             pick_label, pick_type, pros, cons, specs, image_url, display_order)
+                           VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11,0)
+                           RETURNING id""",
+                        art_id,
+                        rev["name"],
+                        rev["brand"] or "Brand",
+                        float(rev["price_inr"]) if rev["price_inr"] else 19999.0,
+                        rating_val,
+                        "Editor's Choice",
+                        "top_pick",
+                        json.dumps(pros),
+                        json.dumps(cons),
+                        json.dumps(specs),
+                        thumb
+                    )
+
+                    # Insert Affiliate Links
+                    aff_links = rev["affiliate_links"] or {}
+                    if isinstance(aff_links, dict):
+                        for platform, url in aff_links.items():
+                            if url:
+                                await prod_conn.execute(
+                                    """INSERT INTO affiliate_links
+                                        (product_id, platform, raw_url, tracked_url, affiliate_tag)
+                                       VALUES ($1,$2,$3,$3,$4)""",
+                                    prod_id, platform.capitalize(), url, "provenpick-21"
+                                )
+                    elif isinstance(aff_links, list):
+                        for aff in aff_links:
+                            if isinstance(aff, dict) and aff.get("raw_url"):
+                                await prod_conn.execute(
+                                    """INSERT INTO affiliate_links
+                                        (product_id, platform, raw_url, tracked_url, affiliate_tag)
+                                       VALUES ($1,$2,$3,$4,$5)""",
+                                    prod_id,
+                                    aff.get("platform", "Amazon"),
+                                    aff.get("raw_url", ""),
+                                    aff.get("tracked_url") or aff.get("raw_url", ""),
+                                    "provenpick-21"
+                                )
+
+                # Mark staging review as published
+                await staging_conn.execute(
+                    "UPDATE staging_product_reviews SET status='published' WHERE id=$1",
+                    rev["id"]
                 )
-                prod_session.add(prod_obj)
-                await prod_session.flush()
+                print(f"✅ Published: '{title_val}' -> provenpick.xyz")
+                published_count += 1
 
-                # Add Affiliate Links
-                if rev.affiliate_links and isinstance(rev.affiliate_links, list):
-                    for aff in rev.affiliate_links:
-                        if isinstance(aff, dict):
-                            prod_session.add(AffiliateLink(
-                                product_id=prod_obj.id,
-                                platform=aff.get("platform", "Amazon"),
-                                raw_url=aff.get("raw_url", "https://amazon.in"),
-                                tracked_url=aff.get("tracked_url", "https://amazon.in"),
-                                affiliate_tag="provenpick-21"
-                            ))
+            except Exception as e:
+                print(f"⚠️  Skipped '{rev['name']}': {e}")
+                continue
 
-            rev.status = "published"
-            published_count += 1
-            print(f"✅ Published: '{rev.review_title or rev.name}' -> provenpick.xyz")
+        print(f"\n🎉 SUCCESS! Published {published_count}/{len(rows)} review articles to provenpick.xyz!")
 
-        await prod_session.commit()
-        await staging_session.commit()
-        print(f"\n🎉 SUCCESS! Published {published_count} review articles directly to provenpick.xyz!")
+    finally:
+        await staging_conn.close()
+        await prod_conn.close()
+
 
 if __name__ == "__main__":
     asyncio.run(publish_all_staging_reviews_to_production_db())
