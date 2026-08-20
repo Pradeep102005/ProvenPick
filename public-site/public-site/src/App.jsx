@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react';
 
-const API_BASE = "http://localhost:8002/api/articles";
+const getApiHost = () => {
+  const { hostname, protocol } = window.location;
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return "http://localhost:8002";
+  }
+  return `${protocol}//${hostname}:8002`;
+};
+const API_HOST = getApiHost();
+const API_BASE = `${API_HOST}/api/articles`;
 
 function App() {
   const [articles, setArticles] = useState([]);

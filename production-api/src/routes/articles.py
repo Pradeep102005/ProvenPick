@@ -275,10 +275,6 @@ async def list_articles(
     category_slug: Optional[str] = None,
     db: AsyncSession = Depends(get_session)
 ):
-    now = datetime.now(timezone.utc).timestamp()
-    if not category_slug and _ARTICLES_CACHE["data"] and (now - _ARTICLES_CACHE["ts"] < 300):
-        return _ARTICLES_CACHE["data"]
-
     stmt = select(Article).where(Article.is_published == True).options(
         selectinload(Article.l3_category),
         selectinload(Article.products)
@@ -315,9 +311,6 @@ async def list_articles(
         }
         for art in articles
     ]
-    if not category_slug:
-        _ARTICLES_CACHE["data"] = result
-        _ARTICLES_CACHE["ts"] = now
     return result
 
 @router.patch("/{slug}/feature")
