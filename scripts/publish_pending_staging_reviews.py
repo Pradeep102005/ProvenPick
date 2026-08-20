@@ -39,6 +39,7 @@ class Article(ProdBase):
     updated_at        = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
     view_count        = Column(Integer, default=0)
     is_featured       = Column(Boolean, default=False)
+    rating            = Column(Numeric(3, 1), default=4.5)
 
     products = relationship("Product", back_populates="article", cascade="all, delete-orphan")
 
