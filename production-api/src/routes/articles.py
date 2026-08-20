@@ -401,3 +401,28 @@ async def get_article(
             for s in art.sources
         ]
     }
+
+
+# ── Route: Increment View Count ──
+@router.post("/{slug}/view", status_code=200)
+async def increment_view(slug: str, db: AsyncSession = Depends(get_session)):
+    stmt = select(Article).where(Article.slug == slug)
+    res = await db.execute(stmt)
+    art = res.scalars().first()
+    if art:
+        art.view_count = (art.view_count or 0) + 1
+        await db.commit()
+    return {"status": "ok"}
+
+
+# ── Route: Track Affiliate Link Click ──
+@router.post("/affiliate/click/{link_id}", status_code=200)
+async def track_affiliate_click(link_id: int, db: AsyncSession = Depends(get_session)):
+    from src.db.models import AffiliateLink
+    stmt = select(AffiliateLink).where(AffiliateLink.id == link_id)
+    res = await db.execute(stmt)
+    link = res.scalars().first()
+    if link:
+        link.click_count = (link.click_count or 0) + 1
+        await db.commit()
+    return {"status": "ok"}
