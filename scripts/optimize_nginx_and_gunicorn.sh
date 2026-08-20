@@ -24,9 +24,9 @@ server {
         try_files $uri $uri/ /editor/index.html;
     }
 
-    # 2. Staging API (Editor Dashboard Backend) -> Explicit 127.0.0.1 IPv4
-    location /staging-api/ {
-        proxy_pass http://127.0.0.1:8001/;
+    # 3. Production API (Public Site Backend) -> pass full /api/... path
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -34,9 +34,9 @@ server {
         proxy_read_timeout 60s;
     }
 
-    # 3. Production API (Public Site Backend) -> Explicit 127.0.0.1 IPv4
-    location /api/ {
-        proxy_pass http://127.0.0.1:8000;
+    # 4. Staging API (Editor Dashboard) -> strip /staging-api/ and map to /api/
+    location /staging-api/ {
+        proxy_pass http://127.0.0.1:8001/api/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
