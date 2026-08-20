@@ -92,26 +92,62 @@ async def fetch_transcript_with_ytdlp(video_id: str) -> tuple[str, str]:
     
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
-        transcript_list = await loop.run_in_executor(
-            None,
-            lambda: YouTubeTranscriptApi.list_transcripts(video_id)
-        )
+        
+        transcript_list = None
+        # Try new API (>= 0.6.x): instance method .list()
         try:
-            transcript = transcript_list.find_transcript(supported_langs)
-        except Exception:
-            transcript = next(iter(transcript_list))
-            
-        parts = await loop.run_in_executor(None, lambda: transcript.fetch())
-        text_segments = []
-        for p in parts:
-            if isinstance(p, dict):
-                text_segments.append(p.get("text", ""))
-            else:
-                text_segments.append(getattr(p, "text", ""))
-        clean_text = re.sub(r'\s+', ' ', " ".join(text_segments)).strip()
-        if len(clean_text) > 100:
-            logger.info("Successfully fetched transcript via youtube-transcript-api", video_id=video_id)
-            return transcript.language_code, clean_text
+            api_instance = YouTubeTranscriptApi()
+            transcript_list = await loop.run_in_executor(
+                None,
+                lambda: api_instance.list(video_id)
+            )
+        except (AttributeError, TypeError):
+            pass
+        
+        # Fallback to old API (< 0.6.x): class method .list_transcripts()
+        if transcript_list is None:
+            try:
+                transcript_list = await loop.run_in_executor(
+                    None,
+                    lambda: YouTubeTranscriptApi.list_transcripts(video_id)
+                )
+            except AttributeError:
+                pass
+
+        if transcript_list is not None:
+            try:
+                transcript = transcript_list.find_transcript(supported_langs)
+            except Exception:
+                transcript = next(iter(transcript_list), None)
+                
+            if transcript:
+                parts = await loop.run_in_executor(None, lambda: transcript.fetch())
+                text_segments = []
+                for p in parts:
+                    if isinstance(p, dict):
+                        text_segments.append(p.get("text", ""))
+                    else:
+                        text_segments.append(getattr(p, "text", ""))
+                clean_text = re.sub(r'\s+', ' ', " ".join(text_segments)).strip()
+                if len(clean_text) > 100:
+                    logger.info("Successfully fetched transcript via youtube-transcript-api", video_id=video_id)
+                    return transcript.language_code, clean_text
+        
+        # Final fallback: get_transcript() works in both old and new versions
+        for lang in supported_langs:
+            try:
+                parts = await loop.run_in_executor(
+                    None,
+                    lambda l=lang: YouTubeTranscriptApi.get_transcript(video_id, languages=[l])
+                )
+                text_segments = [p.get("text", "") if isinstance(p, dict) else getattr(p, "text", "") for p in parts]
+                clean_text = re.sub(r'\s+', ' ', " ".join(text_segments)).strip()
+                if len(clean_text) > 100:
+                    logger.info("Successfully fetched transcript via get_transcript fallback", video_id=video_id, lang=lang)
+                    return lang, clean_text
+            except Exception:
+                continue
+
     except Exception as e:
         logger.warn("youtube-transcript-api list_transcripts failed", video_id=video_id, error=str(e))
 
