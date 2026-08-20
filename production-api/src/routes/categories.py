@@ -49,24 +49,21 @@ async def get_categories_tree(db: AsyncSession = Depends(get_session)):
     res = await db.execute(stmt)
     l1_list = res.scalars().all()
 
+    # Load all published articles once
+    art_stmt = select(Article.category_name).where(Article.is_published == True)
+    art_res = await db.execute(art_stmt)
+    all_cat_names = [row[0] or "" for row in art_res.fetchall()]
+
     result = []
     for l1 in l1_list:
         l2_outs = []
         for l2 in l1.l2_categories:
             if not l2.is_active:
                 continue
-            
-            count_stmt = select(Article).where(
-                Article.is_published == True
-            )
-            count_res = await db.execute(count_stmt)
-            all_arts = count_res.scalars().all()
             l2_count = sum(
-                1 for art in all_arts 
-                if (art.category_name and l2.name.lower() in art.category_name.lower()) or 
-                   (art.l3_category and art.l3_category.l2_id == l2.id)
+                1 for cat in all_cat_names
+                if l2.name.lower() in cat.lower()
             )
-            
             l2_outs.append(L2CategoryOut(
                 id=l2.id,
                 name=l2.name,
@@ -106,21 +103,19 @@ async def get_l1_category_detail(
         raise HTTPException(status_code=404, detail=f"Category '{l1_slug}' not found")
 
     l2_outs = []
+
+    # Load all published articles once
+    art_stmt = select(Article.category_name).where(Article.is_published == True)
+    art_res = await db.execute(art_stmt)
+    all_cat_names = [row[0] or "" for row in art_res.fetchall()]
+
     for l2 in l1.l2_categories:
         if not l2.is_active:
             continue
-        
-        count_stmt = select(Article).where(
-            Article.is_published == True
-        )
-        count_res = await db.execute(count_stmt)
-        all_arts = count_res.scalars().all()
         l2_count = sum(
-            1 for art in all_arts 
-            if (art.category_name and l2.name.lower() in art.category_name.lower()) or 
-               (art.l3_category and art.l3_category.l2_id == l2.id)
+            1 for cat in all_cat_names
+            if l2.name.lower() in cat.lower()
         )
-
         l2_outs.append(L2CategoryOut(
             id=l2.id,
             name=l2.name,
