@@ -104,12 +104,9 @@ function App() {
       
       if (selectedReview) {
         const updated = data.find(r => r.product_uuid === selectedReview.product_uuid);
-        if (updated) {
-          setSelectedReview(updated);
-          setCategoryName(updated.category_name || PRESET_CATEGORIES[0]);
-        }
+        if (updated) await fetchFullReview(updated.product_uuid);
       } else if (data.length > 0) {
-        setSelectedReview(data[0]);
+        await fetchFullReview(data[0].product_uuid);
         setCategoryName(data[0].category_name || PRESET_CATEGORIES[0]);
       }
     } catch (err) {
@@ -124,12 +121,23 @@ function App() {
     fetchKafkaLogs();
   }, [filterStatus]);
 
+  const fetchFullReview = async (productUuid) => {
+    try {
+      const res = await fetch(`${API_BASE}/${productUuid}`);
+      if (!res.ok) return;
+      const full = await res.json();
+      setSelectedReview(full);
+      const currentCat = full.category_name || PRESET_CATEGORIES[0];
+      setCategoryName(PRESET_CATEGORIES.includes(currentCat) ? currentCat : PRESET_CATEGORIES[0]);
+      setL3CategoryId(full.l3_category_id || 1);
+    } catch (err) {
+      console.error("Failed to fetch full review", err);
+    }
+  };
+
   const selectReview = (review) => {
-    setSelectedReview(review);
+    fetchFullReview(review.product_uuid);
     setActiveTab("draft");
-    const currentCat = review.category_name || PRESET_CATEGORIES[0];
-    setCategoryName(PRESET_CATEGORIES.includes(currentCat) ? currentCat : PRESET_CATEGORIES[0]);
-    setL3CategoryId(review.l3_category_id || 1);
   };
 
   const triggerToast = (message, url = null) => {
