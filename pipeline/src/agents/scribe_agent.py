@@ -152,6 +152,8 @@ async def fetch_transcript_with_ytdlp(video_id: str) -> tuple[str, str]:
     except Exception as e:
         logger.warn("youtube-transcript-api list_transcripts failed", video_id=video_id, error=str(e))
 
+    cookies_path = os.path.join(os.path.dirname(__file__), "../../cookies.txt")
+
     for client_type in [["mweb"], ["web_embedded"], ["android_creator"], ["tv_embedded"]]:
         try:
             ydl_opts = {
@@ -163,6 +165,8 @@ async def fetch_transcript_with_ytdlp(video_id: str) -> tuple[str, str]:
                 "outtmpl": os.path.join(SCRATCH_DIR, f"{video_id}.%(ext)s"),
                 "extractor_args": {"youtube": {"player_client": client_type}}
             }
+            if os.path.exists(cookies_path):
+                ydl_opts["cookiefile"] = cookies_path
 
             def extract_sub():
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
