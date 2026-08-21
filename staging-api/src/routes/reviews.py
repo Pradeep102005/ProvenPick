@@ -177,17 +177,43 @@ async def submit_review(
         res = await db.execute(stmt)
         return res.scalars().first()
 
-@router.get("", response_model=List[StagingProductReviewOut])
+class StagingReviewSummary(BaseModel):
+    """Lightweight model for the list view — excludes review_sections, specs, pros, cons, image_urls, mindmap_mermaid."""
+    id: int
+    product_uuid: UUID
+    name: str
+    brand: Optional[str] = None
+    price_inr: Optional[float] = None
+    category_name: Optional[str] = None
+    review_title: str
+    slug: str
+    summary: Optional[str] = None
+    verdict: Optional[str] = None
+    rating: Optional[float] = None
+    status: str
+    rejection_count: int = 0
+    editor_comments: Optional[str] = None
+    submitted_at: Optional[datetime] = None
+    reviewed_at: Optional[datetime] = None
+    reviewed_by: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+@router.get("", response_model=List[StagingReviewSummary])
 async def list_reviews(
     status: Optional[str] = None,
     db: AsyncSession = Depends(get_session)
 ):
-    stmt = select(StagingProductReview).options(selectinload(StagingProductReview.sources))
+    # Select only lightweight columns — no review_sections, specs, pros, cons, image_urls
+    stmt = select(StagingProductReview)
     if status:
         stmt = stmt.where(StagingProductReview.status == status)
     stmt = stmt.order_by(StagingProductReview.submitted_at.desc())
     result = await db.execute(stmt)
-    return result.scalars().all()
+    reviews = result.scalars().all()
+    # Return only summary fields — heavy fields stripped by response_model
+    return reviews
 
 @router.get("/{uuid}", response_model=StagingProductReviewOut)
 async def get_review_by_uuid(
