@@ -48,13 +48,30 @@ async def classify_video(video_title: str) -> tuple[bool, str]:
     """
     title_lower = video_title.lower()
     
-    # 1. Immediate rejection rules for non-review vlogs/news
-    reject_keywords = ["scam", "case hogaya", "funny", "vlog", "rant", "moving on", "podcast", "live q&a", "news", "controversy"]
+    # 1. Immediate rejection — non-tech/food/cooking/lifestyle content
+    reject_keywords = [
+        # Non-tech content
+        "scam", "funny", "vlog", "rant", "podcast", "live q&a", "news", "controversy",
+        "moving on", "case hogaya", "storytime",
+        # Food & cooking
+        "taste like", "recipe", "cook", "food", "saffron", "spice", "chef", "restaurant",
+        "eating", "meal", "dish", "ingredient", "bake", "baking", "grill",
+        # Lifestyle & fitness
+        "workout", "fitness", "gym", "yoga", "meditation", "travel", "vlog", "haul",
+        # Finance/crypto
+        "stock", "crypto", "bitcoin", "invest", "finance", "money",
+    ]
     if any(rk in title_lower for rk in reject_keywords):
-        return False, "Skipped (non-review title keyword)"
+        return False, "Skipped (non-tech content keyword)"
 
     # 2. Strong acceptance keywords for tech reviews
-    review_keywords = ["review", "unboxing", "hands-on", "vs", "test", "buying guide", "under 1000", "under 10000", "under 20000", "under 30000", "under 40000", "under 50000", "best", "phone", "gadget", "watch", "laptop", "camera", "tv", "shorts", "first look"]
+    review_keywords = [
+        "review", "unboxing", "hands-on", "vs", "test", "buying guide",
+        "under 1000", "under 10000", "under 20000", "under 30000", "under 40000", "under 50000",
+        "best", "phone", "gadget", "watch", "laptop", "camera", "tv", "first look",
+        "earbuds", "headphone", "speaker", "router", "keyboard", "mouse", "monitor",
+        "tablet", "smartwatch", "smartphone", "processor", "gpu", "ssd",
+    ]
     if any(rk in title_lower for rk in review_keywords):
         return True, ""
 
@@ -83,8 +100,8 @@ async def classify_video(video_title: str) -> tuple[bool, str]:
                 await asyncio.sleep(10)
             else:
                 logger.error("Failed to classify video via LLM", title=video_title, error=str(e))
-                return True, ""  # Default allow review
-    return True, ""
+                return False, "LLM classification failed — defaulting to REJECT to avoid hallucinated reviews"
+    return False, "Could not confirm as product review — rejected"
 
 async def run_channel_scan():
     """
