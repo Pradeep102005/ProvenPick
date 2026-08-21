@@ -1,9 +1,11 @@
+import asyncio
 import os
 import structlog
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 
 from src.orchestrator.state import OrchestratorState
+from src.services.gemini_rate_limiter import gemini_rate_limit
 
 logger = structlog.get_logger()
 
@@ -98,6 +100,7 @@ async def run_critic_agent(state: OrchestratorState) -> OrchestratorState:
         if not editor_comments:
             editor_comments = "None. Verify general quality, flow, spelling, and structure."
 
+        await gemini_rate_limit()  # enforce 10 RPM cap before audit call
         llm_pro = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash",
             google_api_key=GEMINI_API_KEY,

@@ -17,6 +17,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from src.db.models import TranscriptCache, PipelineJob
 from src.db.session import AsyncSessionFactory
 from src.orchestrator.state import OrchestratorState
+from src.services.gemini_rate_limiter import gemini_rate_limit
 
 logger = structlog.get_logger()
 
@@ -389,6 +390,7 @@ async def run_scribe_agent(state: OrchestratorState) -> OrchestratorState:
         res = None
         for attempt in range(5):
             try:
+                await gemini_rate_limit()  # enforce 10 RPM cap before every call
                 res = await chain.ainvoke({
                     "transcript": transcript[:35000],
                     "rag_context": rag_context,
@@ -397,8 +399,8 @@ async def run_scribe_agent(state: OrchestratorState) -> OrchestratorState:
                 break
             except Exception as llm_err:
                 if "429" in str(llm_err) or "RESOURCE_EXHAUSTED" in str(llm_err):
-                    logger.warn("Scribe Agent: Gemini API 429 rate limit hit. Waiting 15s before retry...", attempt=attempt+1)
-                    await asyncio.sleep(15)
+                    logger.warn("Scribe Agent: Gemini API 429 rate limit hit. Waiting 60s before retry...", attempt=attempt+1)
+                    await asyncio.sleep(60)  # longer backoff on 429
                 else:
                     raise llm_err
 

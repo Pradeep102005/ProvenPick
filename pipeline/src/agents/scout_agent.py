@@ -11,6 +11,7 @@ from src.db.models import Channel, ProcessedVideo, PipelineJob
 from src.db.session import AsyncSessionFactory
 from src.services.youtube_rss import get_latest_videos
 from src.services.redis_client import redis_client
+from src.services.gemini_rate_limiter import gemini_rate_limit
 
 logger = structlog.get_logger()
 
@@ -60,6 +61,7 @@ async def classify_video(video_title: str) -> tuple[bool, str]:
     # 3. Fallback to Gemini LLM with retry backoff
     for attempt in range(3):
         try:
+            await gemini_rate_limit()  # enforce 10 RPM cap
             prompt = ChatPromptTemplate.from_template(CLASSIFICATION_PROMPT)
             llm = ChatGoogleGenerativeAI(
                 model="gemini-2.5-flash",
