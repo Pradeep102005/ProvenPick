@@ -368,11 +368,30 @@ async def run_scribe_agent(state: OrchestratorState) -> OrchestratorState:
     try:
         transcript = await get_or_create_transcript(state["video_id"])
     except Exception as e:
-        logger.error("Scribe Agent: Failed to download transcript, using title context", error=str(e))
-        transcript = f"Video Title: {state['video_title']}"
+        logger.error(
+            "Scribe Agent: Transcript fetch failed — ABORTING job to prevent hallucinated review",
+            video_id=state["video_id"],
+            video_title=state["video_title"],
+            error=str(e)
+        )
+        # Hard stop: without a real transcript, Gemini will invent a fake product.
+        # Mark job as skipped so it doesn't loop. Can be retried later with cookies.
+        state["status"] = "skipped"
+        return state
 
-    logger.info("Scribe Agent: Feeding YouTube transcript context to review writing LLM.", length=len(transcript))
+    # Safety check: transcript must have real content (not just the title)
+    if len(transcript.strip()) < 200:
+        logger.error(
+            "Scribe Agent: Transcript too short to generate an accurate review — ABORTING",
+            length=len(transcript),
+            video_id=state["video_id"]
+        )
+        state["status"] = "skipped"
+        return state
+
+    logger.info("Scribe Agent: Transcript loaded successfully. Generating review.", length=len(transcript))
     rag_context = f"Video Title: {state['video_title']}\n\nTranscript Content:\n{transcript[:35000]}"
+
 
     try:
         comments = state.get("editor_comments", "")
