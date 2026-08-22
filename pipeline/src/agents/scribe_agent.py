@@ -118,12 +118,15 @@ async def fetch_transcript_with_ytdlp(video_id: str) -> tuple[str, str]:
 
     for client_type in [["mweb"], ["web_embedded"], ["android_creator"], ["tv_embedded"]]:
         try:
+            await asyncio.sleep(3)  # Gentle delay to avoid YouTube session rate-limits
             ydl_opts = {
                 "writesubtitles": True,
                 "writeautomaticsub": True,
                 "skip_download": True,
                 "subtitleslangs": supported_langs,
                 "subtitlesformat": "json3",
+                "quiet": True,
+                "no_warnings": True,
                 "outtmpl": os.path.join(SCRATCH_DIR, f"{video_id}.%(ext)s"),
                 "extractor_args": {"youtube": {"player_client": client_type}}
             }
